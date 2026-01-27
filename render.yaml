@@ -1,0 +1,36 @@
+services:
+  # Cloud Mirror Bot API Service
+  - type: web
+    name: cloud-mirror-bot
+    env: python
+    region: singapore  # Pilih region terdekat
+    plan: free  # Free tier untuk pemakaian ringan
+    
+    # Build commands
+    buildCommand: |
+      pip install -r requirements.txt
+    
+    # Start command
+    startCommand: |
+      python main.py
+    
+    # Environment variables
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: RENDER
+        value: true
+      - key: DEBUG
+        value: false
+      
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy
+    autoDeploy: true
+    
+    # Resource limits for free tier
+    disk:
+      name: tmpfs
+      mountPath: /tmp
+      sizeGB: 1
