@@ -1,6 +1,8 @@
 import io
 import os
+import json
 from typing import Optional, Dict, Any
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -22,18 +24,37 @@ class GoogleDriveManager:
     def _initialize_service(self):
         """Initialize Google Drive API service"""
         try:
-            # Create credentials from refresh token
-            self.credentials = Credentials(
-                token=None,
-                refresh_token=settings.google_drive_refresh_token,
-                client_id=settings.google_drive_client_id,
-                client_secret=settings.google_drive_client_secret,
-                token_uri="https://oauth2.googleapis.com/token"
-            )
+            # Priority 1: Service Account from environment variable JSON string
+            if settings.google_drive_service_account_json:
+                try:
+                    # Parse JSON string from environment variable
+                    service_account_info = json.loads(settings.google_drive_service_account_json)
+                    self.credentials = service_account.Credentials.from_service_account_info(
+                        service_account_info,
+                        scopes=['https://www.googleapis.com/auth/drive']
+                    )
+                    print("✓ Google Drive service initialized using Service Account from environment variable")
+                except json.JSONDecodeError as e:
+                    raise Exception(f"Invalid JSON in GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: {str(e)}")
             
-            # Refresh token if needed
-            if self.credentials.expired:
-                self.credentials.refresh(Request())
+            # Priority 2: Legacy OAuth 2.0 credentials
+            elif settings.google_drive_client_id and settings.google_drive_client_secret and settings.google_drive_refresh_token:
+                self.credentials = Credentials(
+                    token=None,
+                    refresh_token=settings.google_drive_refresh_token,
+                    client_id=settings.google_drive_client_id,
+                    client_secret=settings.google_drive_client_secret,
+                    token_uri="https://oauth2.googleapis.com/token"
+                )
+                
+                # Refresh token if needed
+                if self.credentials.expired:
+                    self.credentials.refresh(Request())
+                
+                print("✓ Google Drive service initialized using OAuth 2.0 credentials")
+            
+            else:
+                raise Exception("No valid Google Drive credentials found. Please set either GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON or OAuth 2.0 credentials.")
             
             # Build the service
             self.service = build('drive', 'v3', credentials=self.credentials)

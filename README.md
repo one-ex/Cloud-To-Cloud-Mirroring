@@ -31,17 +31,34 @@ Bot Telegram untuk mirror file dari berbagai sumber cloud ke Google Drive secara
 
 ### 2. Setup Google Drive API
 
+#### **Opsi A: Service Account (Recommended untuk Render)**
+
+1. Buka [Google Cloud Console](https://console.cloud.google.com/)
+2. Buat project baru atau pilih existing project
+3. Enable **Google Drive API**
+4. Buat Service Account:
+   - IAM & Admin → Service Accounts → Create Service Account
+   - Beri nama (contoh: "cloud-mirror-bot")
+   - Role: "Editor" atau "Owner"
+   - Create key → JSON format → Download
+5. Konversi file JSON ke environment variable:
+   ```bash
+   python scripts/convert_service_account_to_env.py
+   ```
+6. Copy output dan paste ke environment variable `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` di Render
+
+#### **Opsi B: OAuth 2.0 Credentials (Alternative)**
+
 1. Buka [Google Cloud Console](https://console.cloud.google.com/)
 2. Buat project baru atau pilih existing project
 3. Enable **Google Drive API**
 4. Buat OAuth 2.0 credentials:
    - Application type: "Desktop app"
-   - Download credentials JSON
+   - Download credentials JSON (simpan sebagai `client_secrets.json`)
 5. Dapatkan refresh token:
    ```bash
    python scripts/get_refresh_token.py
    ```
-   (Script akan disediakan)
 
 ### 3. Konfigurasi Environment
 
@@ -51,12 +68,29 @@ Bot Telegram untuk mirror file dari berbagai sumber cloud ke Google Drive secara
    ```
 
 2. Edit `.env` dengan informasi Anda:
+
+   **Untuk Service Account (Opsi A):**
    ```env
    # Telegram Bot Configuration
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
    TELEGRAM_WEBHOOK_SECRET=your_webhook_secret_here
    
-   # Google Drive Configuration
+   # Google Drive Configuration (Service Account)
+   GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON={"type": "service_account","project_id": "your-project-id",...}
+   GOOGLE_DRIVE_FOLDER_ID=your_google_drive_folder_id_here
+   
+   # Application Configuration
+   APP_URL=https://your-render-app.onrender.com
+   MAX_FILE_SIZE_MB=2048
+   ```
+
+   **Untuk OAuth 2.0 (Opsi B):**
+   ```env
+   # Telegram Bot Configuration
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+   TELEGRAM_WEBHOOK_SECRET=your_webhook_secret_here
+   
+   # Google Drive Configuration (OAuth 2.0)
    GOOGLE_DRIVE_CLIENT_ID=your_google_client_id_here
    GOOGLE_DRIVE_CLIENT_SECRET=your_google_client_secret_here
    GOOGLE_DRIVE_REFRESH_TOKEN=your_google_refresh_token_here
@@ -89,7 +123,20 @@ Bot Telegram untuk mirror file dari berbagai sumber cloud ke Google Drive secara
    - **Start Command:** `python main.py`
    - **Plan:** Free
 
-### 5. Setup Webhook Telegram
+### 5. Beri Akses Folder Google Drive ke Service Account
+
+Jika menggunakan Service Account (Opsi A), Anda perlu share folder dengan email Service Account:
+
+1. Buka Google Drive
+2. Pilih folder tujuan (atau buat folder baru)
+3. Klik kanan → "Share"
+4. Masukkan email Service Account: `mirror-bot-485421@appspot.gserviceaccount.com`
+5. Set permission: "Editor"
+6. Copy Folder ID dari URL:
+   - Format: `https://drive.google.com/drive/folders/FOLDER_ID`
+   - Contoh: Folder ID = `1AbCdEfGhIjKlMnOpQrStUvWxYz`
+
+### 6. Setup Webhook Telegram
 
 Setelah deployment selesai, setup webhook:
 
