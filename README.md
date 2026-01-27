@@ -156,7 +156,7 @@ error: failed to create directory `/usr/local/cargo/registry/cache/index.crates.
 Caused by: Read-only file system (os error 30)
 ```
 
-Ini disebabkan oleh pydantic-core versi 2.14.1 yang memerlukan Rust toolchain untuk kompilasi. Solusi:
+Ini disebabkan karena beberapa versi `pydantic` memerlukan toolchain Rust untuk kompilasi, yang tidak tersedia di lingkungan Render. Solusi:
 
 1. **File .python-version**: Pastikan file `.python-version` ada di root repository dengan konten:
    ```
@@ -165,10 +165,23 @@ Ini disebabkan oleh pydantic-core versi 2.14.1 yang memerlukan Rust toolchain un
    Ini memastikan Render menggunakan Python 3.9.0 yang lebih stabil.
 
 2. **Update requirements.txt**: Pastikan requirements.txt berisi:
-   ```
-    pydantic==2.4.2
-   ```
-   Versi 2.4.2 menggunakan binary wheel yang tidak memerlukan Rust toolchain.
+    ```txt
+    fastapi==0.104.1
+    uvicorn[standard]==0.24.0
+    python-telegram-bot==20.6
+    google-api-python-client==2.108.0
+    google-auth-httplib2==0.1.1
+    google-auth-oauthlib==1.1.0
+    requests==2.31.0
+    aiohttp==3.8.6
+    python-multipart==0.0.6
+    python-dotenv==1.0.0
+    cloudscraper==1.2.71
+    beautifulsoup4==4.12.2
+    pydantic==2.0.3
+    httpx==0.25.1
+    ```
+    Versi 2.0.3 menggunakan binary wheel yang tidak memerlukan Rust toolchain, dan aiohttp==3.8.6 lebih kompatibel.
 
 3. **Deploy ulang**: Setelah perubahan di-push ke GitHub, Render akan otomatis redeploy.
 
