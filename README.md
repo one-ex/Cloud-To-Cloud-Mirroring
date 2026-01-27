@@ -166,10 +166,9 @@ Ini disebabkan oleh pydantic-core versi 2.14.1 yang memerlukan Rust toolchain un
 
 2. **Update requirements.txt**: Pastikan requirements.txt berisi:
    ```
-   pydantic==2.5.0
-   pydantic-core==2.13.0
+    pydantic==2.4.2
    ```
-   Versi 2.13.0 tidak memerlukan Rust toolchain.
+   Versi 2.4.2 menggunakan binary wheel yang tidak memerlukan Rust toolchain.
 
 3. **Deploy ulang**: Setelah perubahan di-push ke GitHub, Render akan otomatis redeploy.
 
