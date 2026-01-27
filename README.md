@@ -146,6 +146,39 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
   -d '{"url": "https://your-render-app.onrender.com/webhook", "secret_token": "your_webhook_secret"}'
 ```
 
+## Troubleshooting
+
+### Error Build di Render
+
+Jika terjadi error saat build di Render seperti:
+```
+error: failed to create directory `/usr/local/cargo/registry/cache/index.crates.io-...`
+Caused by: Read-only file system (os error 30)
+```
+
+Ini disebabkan oleh pydantic-core versi 2.14.1 yang memerlukan Rust toolchain untuk kompilasi. Solusi:
+
+1. **File .python-version**: Pastikan file `.python-version` ada di root repository dengan konten:
+   ```
+   3.9.0
+   ```
+   Ini memastikan Render menggunakan Python 3.9.0 yang lebih stabil.
+
+2. **Update requirements.txt**: Pastikan requirements.txt berisi:
+   ```
+   pydantic==2.5.0
+   pydantic-core==2.13.0
+   ```
+   Versi 2.13.0 tidak memerlukan Rust toolchain.
+
+3. **Deploy ulang**: Setelah perubahan di-push ke GitHub, Render akan otomatis redeploy.
+
+### Error Lainnya
+
+- **ModuleNotFoundError**: Pastikan semua dependencies terdaftar di requirements.txt
+- **Environment variables missing**: Pastikan semua environment variables diatur di Render Dashboard
+- **Port binding error**: Render menggunakan environment variable `PORT`, pastikan aplikasi menggunakan `os.getenv('PORT', '8000')`
+
 ## Penggunaan
 
 ### Via Telegram Bot

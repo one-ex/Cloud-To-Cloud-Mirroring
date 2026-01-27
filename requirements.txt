@@ -11,4 +11,5 @@ python-dotenv==1.0.0
 cloudscraper==1.2.71
 beautifulsoup4==4.12.2
 pydantic==2.5.0
+pydantic-core==2.13.0
 httpx==0.25.1
