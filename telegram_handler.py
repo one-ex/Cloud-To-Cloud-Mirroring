@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from dotenv import load_dotenv
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
+from utils import format_bytes
 
 # Load environment variables
 load_dotenv()
@@ -30,29 +31,47 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Simpan status pending user
     user_pending[update.effective_user.id] = {'url': url, 'info': info}
     kb = ReplyKeyboardMarkup([['Ya', 'Tidak']], one_time_keyboard=True)
+    
+    # Gunakan format_bytes untuk menampilkan ukuran file
+    file_size_formatted = format_bytes(info.get('size'))
+    
     await update.message.reply_text(
-        f"File: {info['filename']}\nUkuran: {info['size']} bytes\nTipe: {info['type']}\nLanjutkan mirroring?", reply_markup=kb)
+        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?", reply_markup=kb)
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in user_pending:
         await update.message.reply_text("Tidak ada proses yang menunggu konfirmasi.")
         return
+    
     if update.message.text.lower() == 'ya':
         url = user_pending[user_id]['url']
         info = user_pending[user_id]['info']
-        await update.message.reply_text("Memulai proses mirroring...")
+        
+        # Kirim pesan awal yang akan diedit
+        progress_message = await update.message.reply_text("Memulai proses mirroring...")
+
         async def progress_callback(percent, error=None, done=False):
-            if error:
-                await update.message.reply_text(f"❌ Error: {error}")
-            elif done:
-                await update.message.reply_text("✅ Proses mirroring selesai!")
-            else:
-                await update.message.reply_text(f"Progress: {percent}%")
+            try:
+                if error:
+                    await progress_message.edit_text(f"❌ Error: {error}")
+                elif done:
+                    await progress_message.edit_text("✅ Proses mirroring selesai!")
+                else:
+                    # Buat progress bar sederhana
+                    bar_length = 10
+                    filled_length = int(bar_length * percent / 100)
+                    bar = '█' * filled_length + '─' * (bar_length - filled_length)
+                    await progress_message.edit_text(f"Progress: [{bar}] {percent}%")
+            except Exception as e:
+                logger.error(f"Gagal mengedit pesan progres: {e}")
+
         result = await stream_download_to_drive(url, info, progress_callback)
+        # Kirim hasil akhir sebagai pesan baru
         await update.message.reply_text(result)
     else:
         await update.message.reply_text("Proses mirroring dibatalkan.")
+    
     user_pending.pop(user_id, None)
 
 def main():
