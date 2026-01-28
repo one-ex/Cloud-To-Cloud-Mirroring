@@ -18,7 +18,7 @@ async def stream_download_to_drive(url, info, progress_callback=None):
                 await progress_callback(0, error=error_msg)
             return error_msg
 
-        filename = info.get('filename') or url.split('/')[-1].split('?')[0]
+        filename = info.get('filename') or url.rstrip('/').split('/')[-1].split('?')[0]
         size = info.get('size') 
         mime_type = info.get('type', 'application/octet-stream')
         
