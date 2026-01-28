@@ -2,13 +2,13 @@ import io
 import os
 import json
 from typing import Optional, Dict, Any
-from google.oauth2 import service_account
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-from googleapiclient.errors import HttpError
-import httpx
+from google.oauth2 import service_account # type: ignore
+from google.oauth2.credentials import Credentials # type: ignore
+from google.auth.transport.requests import Request # type: ignore
+from googleapiclient.discovery import build # type: ignore
+from googleapiclient.http import MediaIoBaseUpload # type: ignore
+from googleapiclient.errors import HttpError # type: ignore
+import httpx # type: ignore
 
 from config import settings
 
@@ -62,6 +62,114 @@ class GoogleDriveManager:
         except Exception as e:
             raise Exception(f"Failed to initialize Google Drive service: {str(e)}")
     
+    async def upload_from_url_streaming(self, url: str, filename: str, mime_type: str = None) -> Dict[str, Any]:
+        """
+        Download dan upload file dari URL dengan streaming langsung ke Google Drive
+        menggunakan resumable upload dengan chunking
+        
+        Args:
+            url: URL file yang akan diupload
+            filename: Nama untuk file yang diupload
+            mime_type: Tipe MIME file
+            
+        Returns:
+            Dictionary dengan hasil upload
+        """
+        try:
+            # Tentukan MIME type jika tidak disediakan
+            if not mime_type:
+                mime_type = 'application/octet-stream'
+            
+            # Buat metadata file
+            file_metadata = {
+                'name': filename,
+                'parents': [settings.google_drive_folder_id]
+            }
+            
+            print(f"Memulai streaming upload {filename} dari {url}...")
+            
+            # Download file dengan streaming dan simpan ke file sementara
+            # Ini lebih aman untuk menghindari masalah memory
+            import tempfile
+            import shutil
+            
+            temp_dir = tempfile.mkdtemp()
+            temp_path = os.path.join(temp_dir, filename)
+            
+            try:
+                # Download file dengan streaming ke file sementara
+                async with httpx.AsyncClient() as client:
+                    async with client.stream('GET', url, follow_redirects=True, timeout=60.0) as response:
+                        response.raise_for_status()
+                        
+                        # Dapatkan total size jika tersedia
+                        content_length = response.headers.get('content-length')
+                        total_size = int(content_length) if content_length else None
+                        
+                        # Buka file untuk menulis
+                        with open(temp_path, 'wb') as f:
+                            downloaded = 0
+                            chunk_size = 2 * 1024 * 1024  # 2MB per chunk
+                            
+                            async for chunk in response.aiter_bytes(chunk_size):
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                
+                                # Tampilkan progress setiap 10MB
+                                if downloaded % (10 * 1024 * 1024) == 0:
+                                    if total_size:
+                                        percent = (downloaded / total_size) * 100
+                                        print(f"Download progress: {downloaded}/{total_size} bytes ({percent:.1f}%)")
+                                    else:
+                                        print(f"Download progress: {downloaded} bytes downloaded")
+                
+                # Upload file sementara ke Google Drive
+                print(f"Mengupload {filename} ke Google Drive...")
+                
+                with open(temp_path, 'rb') as file_stream:
+                    media = MediaIoBaseUpload(file_stream, 
+                                             mimetype=mime_type,
+                                             resumable=True)
+                    
+                    request = self.service.files().create(
+                        body=file_metadata,
+                        media_body=media,
+                        fields='id, name, size, webViewLink'
+                    )
+                    
+                    file = request.execute()
+                    
+                    print(f"Upload berhasil: {file.get('name')} (ID: {file.get('id')})")
+                    
+                    return {
+                        'success': True,
+                        'file_id': file.get('id'),
+                        'file_name': file.get('name'),
+                        'file_size': file.get('size'),
+                        'web_view_link': file.get('webViewLink'),
+                        'message': f"File '{filename}' berhasil diupload ke Google Drive"
+                    }
+                    
+            finally:
+                # Bersihkan file sementara
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass
+                
+        except httpx.RequestError as e:
+            raise Exception(f"Failed to download file: {str(e)}")
+        except HttpError as e:
+            error_details = str(e)
+            if 'quotaExceeded' in error_details:
+                raise Exception("Google Drive quota exceeded")
+            elif 'rateLimitExceeded' in error_details:
+                raise Exception("Rate limit exceeded, please try again later")
+            else:
+                raise Exception(f"Google Drive API error: {error_details}")
+        except Exception as e:
+            raise Exception(f"Upload failed: {str(e)}")
+    
     def upload_file_from_url(self, url: str, filename: str, mime_type: str = None) -> Dict[str, Any]:
         """
         Download file from URL and upload to Google Drive
@@ -78,17 +186,16 @@ class GoogleDriveManager:
             # Download file from URL
             print(f"Downloading file from {url}...")
             
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, follow_redirects=True, timeout=30.0)
-                response.raise_for_status()
-                
-                file_content = response.content
-                file_size = len(file_content)
-                
-                print(f"Downloaded {file_size} bytes")
-                
-                # Upload to Google Drive
-                return self._upload_to_drive(file_content, filename, mime_type)
+            response = httpx.get(url, follow_redirects=True, timeout=30.0)
+            response.raise_for_status()
+            
+            file_content = response.content
+            file_size = len(file_content)
+            
+            print(f"Downloaded {file_size} bytes")
+            
+            # Upload to Google Drive
+            return self._upload_to_drive(file_content, filename, mime_type)
                 
         except httpx.RequestError as e:
             raise Exception(f"Failed to download file: {str(e)}")
@@ -144,7 +251,7 @@ class GoogleDriveManager:
         except Exception as e:
             raise Exception(f"Upload failed: {str(e)}")
     
-    def check_quota(self) -> Dict[str, Any]:
+    async def check_quota(self) -> Dict[str, Any]:
         """Check Google Drive quota usage"""
         try:
             about = self.service.about().get(fields="storageQuota").execute()

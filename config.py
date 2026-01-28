@@ -1,7 +1,7 @@
 import os
 import json
 from typing import Optional
-from pydantic import BaseSettings
+from pydantic import BaseSettings # type: ignore
 
 
 class Settings(BaseSettings):

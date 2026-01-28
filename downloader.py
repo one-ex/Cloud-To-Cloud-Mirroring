@@ -1,9 +1,9 @@
 import re
-import httpx
+import httpx # type: ignore
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
-import cloudscraper
-from bs4 import BeautifulSoup
+import cloudscraper # type: ignore
+from bs4 import BeautifulSoup # type: ignore
 
 from config import settings, MAX_FILE_SIZE_BYTES
 
@@ -190,35 +190,65 @@ class CloudDownloader:
         except Exception as e:
             raise Exception(f"Failed to get direct file info: {str(e)}")
     
-    async def _download_file_content(self, url: str, file_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Download file content"""
+    async def download_file_streaming(self, url: str) -> Dict[str, Any]:
+        """
+        Download file dengan streaming chunking untuk menghindari penyimpanan di RAM
+        
+        Args:
+            url: URL file yang akan didownload
+            
+        Returns:
+            Dictionary dengan informasi file dan generator untuk chunk data
+        """
         try:
+            # Validasi URL
+            self._validate_url(url)
+            
+            # Dapatkan informasi file
+            file_info = await self._get_file_info(url)
             direct_url = file_info.get('direct_url', url)
             
-            # Download file
+            # Periksa ukuran file dari header
             async with httpx.AsyncClient() as client:
-                response = await client.get(direct_url, follow_redirects=True, timeout=60.0)
-                response.raise_for_status()
+                head_response = await client.head(direct_url, follow_redirects=True, timeout=30.0)
+                head_response.raise_for_status()
                 
-                # Periksa ukuran file
-                content_length = response.headers.get('content-length')
+                content_length = head_response.headers.get('content-length')
                 if content_length:
                     file_size = int(content_length)
                     if file_size > MAX_FILE_SIZE_BYTES:
                         raise Exception(f"File too large: {file_size} bytes (max: {MAX_FILE_SIZE_BYTES} bytes)")
+                    file_info['file_size'] = file_size
                 
-                content = response.content
-                actual_size = len(content)
-                
-                # Validasi ukuran
-                if actual_size > MAX_FILE_SIZE_BYTES:
-                    raise Exception(f"File too large: {actual_size} bytes (max: {MAX_FILE_SIZE_BYTES} bytes)")
+                # Buat generator untuk streaming chunk
+                async def chunk_generator():
+                    """Generator untuk menghasilkan chunk data"""
+                    async with httpx.AsyncClient() as download_client:
+                        async with download_client.stream(
+                            'GET', 
+                            direct_url, 
+                            follow_redirects=True, 
+                            timeout=60.0
+                        ) as response:
+                            response.raise_for_status()
+                            
+                            chunk_size = 10 * 1024 * 1024  # 10MB per chunk
+                            total_downloaded = 0
+                            
+                            async for chunk in response.aiter_bytes(chunk_size):
+                                total_downloaded += len(chunk)
+                                
+                                # Validasi ukuran saat streaming
+                                if total_downloaded > MAX_FILE_SIZE_BYTES:
+                                    raise Exception(f"File too large: {total_downloaded} bytes (max: {MAX_FILE_SIZE_BYTES} bytes)")
+                                
+                                yield chunk
                 
                 return {
                     'success': True,
                     'filename': file_info.get('filename'),
-                    'content': content,
-                    'size': actual_size,
+                    'chunk_generator': chunk_generator(),
+                    'size': file_info.get('file_size'),
                     'mime_type': file_info.get('mime_type'),
                     'source': file_info.get('source')
                 }
@@ -227,6 +257,45 @@ class CloudDownloader:
             raise Exception(f"Download request failed: {str(e)}")
         except httpx.HTTPStatusError as e:
             raise Exception(f"Download failed with status {e.response.status_code}")
+        except Exception as e:
+            raise Exception(f"Download failed: {str(e)}")
+    
+    async def download_file(self, url: str) -> Dict[str, Any]:
+        """
+        Download file dari URL (legacy method untuk kompatibilitas)
+        
+        Args:
+            url: URL file yang akan didownload
+            
+        Returns:
+            Dictionary dengan hasil download
+        """
+        try:
+            # Validasi URL
+            self._validate_url(url)
+            
+            # Dapatkan informasi file
+            file_info = await self._get_file_info(url)
+            
+            # Download file dengan streaming
+            result = await self.download_file_streaming(url)
+            
+            # Kumpulkan semua chunk ke memory (untuk kompatibilitas)
+            content = b''
+            async for chunk in result['chunk_generator']:
+                content += chunk
+            
+            return {
+                'success': True,
+                'filename': file_info.get('filename'),
+                'content': content,
+                'size': len(content),
+                'mime_type': file_info.get('mime_type'),
+                'source': file_info.get('source')
+            }
+            
+        except Exception as e:
+            raise Exception(f"Download failed: {str(e)}")
     
     async def close(self):
         """Close session"""

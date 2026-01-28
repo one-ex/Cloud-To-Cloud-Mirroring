@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup  # type: ignore
+from telegram.ext import ( # type: ignore
     Application,
     CommandHandler,
     MessageHandler,
@@ -9,7 +9,7 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
-from telegram.error import TelegramError
+from telegram.error import TelegramError # type: ignore
 
 from config import settings
 from downloader import downloader
@@ -110,7 +110,7 @@ class TelegramBot:
         """Handle /status command"""
         try:
             # Check Google Drive quota
-            quota_info = drive_manager.check_quota()
+            quota_info = await drive_manager.check_quota()
             
             status_message = (
                 "**Status Sistem**\n\n"
@@ -191,36 +191,38 @@ class TelegramBot:
             await processing_msg.edit_text(error_message)
     
     async def _process_mirror_request(self, url: str, user_id: int) -> dict:
-        """Process mirror request"""
+        """Process mirror request dengan streaming untuk menghindari penyimpanan di RAM"""
         try:
-            # Step 1: Download file
-            download_result = await downloader.download_file(url)
+            # Step 1: Dapatkan informasi file
+            file_info = await downloader._get_file_info(url)
+            filename = file_info.get('filename', 'downloaded_file.bin')
+            mime_type = file_info.get('mime_type')
+            file_size = file_info.get('file_size')
             
-            if not download_result['success']:
+            # Validasi ukuran file
+            if file_size and file_size > settings.max_file_size_mb * 1024 * 1024:
                 return {
                     'success': False,
-                    'message': f"Download failed: {download_result.get('error', 'Unknown error')}"
+                    'message': f"File terlalu besar: {file_size} bytes (maks: {settings.max_file_size_mb} MB)"
                 }
             
-            # Step 2: Upload to Google Drive
-            filename = download_result['filename']
-            content = download_result['content']
-            mime_type = download_result.get('mime_type')
-            
-            upload_result = drive_manager._upload_to_drive(
-                content, filename, mime_type
+            # Step 2: Upload langsung dari URL dengan streaming
+            upload_result = await drive_manager.upload_from_url_streaming(
+                url, filename, mime_type
             )
             
-            # Format file size for display
-            file_size = download_result['size']
-            if file_size >= 1024**3:  # GB
-                file_size_human = f"{file_size / (1024**3):.2f} GB"
-            elif file_size >= 1024**2:  # MB
-                file_size_human = f"{file_size / (1024**2):.2f} MB"
-            elif file_size >= 1024:  # KB
-                file_size_human = f"{file_size / 1024:.2f} KB"
+            # Format file size untuk display
+            if file_size:
+                if file_size >= 1024**3:  # GB
+                    file_size_human = f"{file_size / (1024**3):.2f} GB"
+                elif file_size >= 1024**2:  # MB
+                    file_size_human = f"{file_size / (1024**2):.2f} MB"
+                elif file_size >= 1024:  # KB
+                    file_size_human = f"{file_size / 1024:.2f} KB"
+                else:
+                    file_size_human = f"{file_size} bytes"
             else:
-                file_size_human = f"{file_size} bytes"
+                file_size_human = "Unknown size"
             
             return {
                 'success': True,
