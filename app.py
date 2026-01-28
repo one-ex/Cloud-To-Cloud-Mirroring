@@ -54,9 +54,13 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 file_metadata = {'name': file_name, 'parents': [DRIVE_FOLDER_ID]}
                 # file_path = download.files[0].path # type: ignore
                 # media = MediaFileUpload(file_path, resumable=True) 
-                uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute() # type: ignore
-                file_id = uploaded.get('id')
-                await update.message.reply_text(f"Berhasil di-upload ke Google Drive! File ID: {file_id}")
+                # uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute() # type: ignore
+                # file_id = uploaded.get('id')
+                from downloader import stream_download_to_drive
+                info = {'filename': file_name, 'size': file_size, 'type': content_type}
+                result = await stream_download_to_drive(url, info)
+                await update.message.reply_text(result)
+                await update.message.reply_text(f"Berhasil di-upload ke Google Drive! File ID: {file_id}") # type: ignore
             except Exception as e:
                 logger.error(f"Error: {e}")
                 await update.message.reply_text(f"Gagal memproses: {e}")
