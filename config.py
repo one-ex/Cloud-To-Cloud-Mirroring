@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseSettings
 
 
@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     # Application Configuration
     app_url: str = "http://localhost:8000"
     max_file_size_mb: int = 2048  # 2GB maximum
-    allowed_domains: List[str] = ["sourceforge.net", "mediafire.com", "pixeldrain.com"]
     
     # Render/Server Configuration
     port: int = 8000

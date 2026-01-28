@@ -45,15 +45,7 @@ class CloudDownloader:
         if not parsed_url.scheme in ['http', 'https']:
             raise ValueError("URL harus menggunakan HTTP atau HTTPS")
         
-        # Cek domain yang diizinkan
-        domain_allowed = False
-        for allowed_domain in settings.allowed_domains:
-            if allowed_domain in parsed_url.netloc:
-                domain_allowed = True
-                break
-        
-        if not domain_allowed:
-            raise ValueError(f"Domain {parsed_url.netloc} tidak diizinkan")
+        # Tidak ada validasi domain - semua domain diizinkan
     
     async def _get_file_info(self, url: str) -> Dict[str, Any]:
         """Dapatkan informasi file dari URL"""
