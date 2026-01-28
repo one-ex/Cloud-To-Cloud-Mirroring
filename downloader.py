@@ -18,9 +18,16 @@ async def stream_download_to_drive(url, info, progress_callback=None):
                 await progress_callback(0, error=error_msg)
             return error_msg
 
-        filename = info['filename']
+        filename = info.get('filename') or url.split('/')[-1].split('?')[0]
         size = info.get('size') 
         mime_type = info.get('type', 'application/octet-stream')
+        
+        if not filename:
+            error_msg = "Gagal mendapatkan nama file dari URL."
+            logger.error(error_msg)
+            if progress_callback:
+                await progress_callback(0, error=error_msg)
+            return error_msg
         
         session = resumable_upload.init_session(filename, mime_type, size)
         
