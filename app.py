@@ -57,6 +57,10 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute() # type: ignore
                 # file_id = uploaded.get('id')
                 from downloader import stream_download_to_drive
+                # Pastikan file_size dan content_type diambil dari response HEAD
+                content_type = response.headers.get('Content-Type', 'Unknown')
+                content_length = response.headers.get('Content-Length', None)
+                file_size = int(content_length) if content_length else None
                 info = {'filename': file_name, 'size': file_size, 'type': content_type}
                 result = await stream_download_to_drive(url, info)
                 await update.message.reply_text(result)
@@ -75,9 +79,6 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response.status_code != 200:
             await update.message.reply_text("URL tidak dapat diakses atau tidak ditemukan.")
             return
-        content_type = response.headers.get('Content-Type', 'Unknown')
-        content_length = response.headers.get('Content-Length', None)
-        file_size = int(content_length) if content_length else None
         file_name = url.split('/')[-1] or 'file_mirror'
         info_msg = f"Info file:\nNama: {file_name}\nTipe: {content_type}\nUkuran: {file_size if file_size else 'Unknown'} bytes"
         await update.message.reply_text(info_msg)
