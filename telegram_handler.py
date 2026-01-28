@@ -59,7 +59,7 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
-    app.add_handler(MessageHandler(filters.Regex(r"^(?i)(Ya|Tidak)$"), confirm))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
     
     # Jalankan webhook
