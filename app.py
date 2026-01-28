@@ -93,5 +93,6 @@ if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.getenv("PORT", 8080)),
-        webhook_url=WEBHOOK_URL
+        webhook_url=WEBHOOK_URL,
+        webhook_path="/webhook"
     )
