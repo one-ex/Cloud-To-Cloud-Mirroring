@@ -86,12 +86,12 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Gagal memproses: {e}")
 
 if __name__ == "__main__":
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start)) # type: ignore
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror)) # type: ignore
-    app.add_handler(MessageHandler(filters.Regex("^(Ya|Tidak)$"), confirm)) # type: ignore
-    application.run_webhook(
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
+    app.add_handler(MessageHandler(filters.Regex("^(Ya|Tidak)$"), confirm))
+    app.run_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080)),
+        port=int(os.getenv("PORT", 8080)),
         webhook_url=WEBHOOK_URL
     )
