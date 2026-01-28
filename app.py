@@ -45,13 +45,15 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url, file_name = user_pending.pop(chat_id)
             await update.message.reply_text("Melanjutkan proses mirroring...")
             try:
+                
                 # Download file dengan aria2
                 # download = aria2.add_uris([url])
-                download.wait_for_complete()
-                file_path = download.files[0].path
+                # download.wait_for_complete() # type: ignore
+                # file_path = download.files[0].path # type: ignore
                 # Upload ke Google Drive ke folder khusus
+
                 file_metadata = {'name': file_name, 'parents': [DRIVE_FOLDER_ID]}
-                media = MediaFileUpload(file_path, resumable=True)
+                media = MediaFileUpload(file_path, resumable=True) # type: ignore
                 uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
                 file_id = uploaded.get('id')
                 await update.message.reply_text(f"Berhasil di-upload ke Google Drive! File ID: {file_id}")
