@@ -31,7 +31,14 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = user_pending[user_id]['url']
         info = user_pending[user_id]['info']
         await update.message.reply_text("Memulai proses mirroring...")
-        result = await stream_download_to_drive(url, info)
+        async def progress_callback(percent, error=None, done=False):
+            if error:
+                await update.message.reply_text(f"❌ Error: {error}")
+            elif done:
+                await update.message.reply_text("✅ Proses mirroring selesai!")
+            else:
+                await update.message.reply_text(f"Progress: {percent}%")
+        result = await stream_download_to_drive(url, info, progress_callback)
         await update.message.reply_text(result)
     else:
         await update.message.reply_text("Proses mirroring dibatalkan.")
