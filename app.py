@@ -42,29 +42,13 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Jika user sedang konfirmasi, cek jawaban
     if chat_id in user_pending:
         if url.lower() == 'ya':
-            url, file_name = user_pending.pop(chat_id)
+            url, file_name, content_type, file_size = user_pending.pop(chat_id)
             await update.message.reply_text("Melanjutkan proses mirroring...")
             try:
-                
-                # Download file dengan aria2
-                # download = aria2.add_uris([url])
-                # download.wait_for_complete() # type: ignore
-                # Upload ke Google Drive ke folder khusus
-
-                file_metadata = {'name': file_name, 'parents': [DRIVE_FOLDER_ID]}
-                # file_path = download.files[0].path # type: ignore
-                # media = MediaFileUpload(file_path, resumable=True) 
-                # uploaded = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute() # type: ignore
-                # file_id = uploaded.get('id')
                 from downloader import stream_download_to_drive
-                # Pastikan file_size dan content_type diambil dari response HEAD
-                content_type = response.headers.get('Content-Type', 'Unknown')
-                content_length = response.headers.get('Content-Length', None)
-                file_size = int(content_length) if content_length else None
                 info = {'filename': file_name, 'size': file_size, 'type': content_type}
                 result = await stream_download_to_drive(url, info)
                 await update.message.reply_text(result)
-                await update.message.reply_text(f"Berhasil di-upload ke Google Drive! File ID: {file_id}") # type: ignore
             except Exception as e:
                 logger.error(f"Error: {e}")
                 await update.message.reply_text(f"Gagal memproses: {e}")
@@ -74,21 +58,23 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text(f"Memproses URL: {url}")
     try:
-        # Cek apakah URL mengarah ke file dan ambil info file
         response = requests.head(url, allow_redirects=True)
         if response.status_code != 200:
             await update.message.reply_text("URL tidak dapat diakses atau tidak ditemukan.")
             return
         file_name = url.split('/')[-1] or 'file_mirror'
+        content_type = response.headers.get('Content-Type', 'Unknown')
+        content_length = response.headers.get('Content-Length', None)
+        file_size = int(content_length) if content_length else None
         info_msg = f"Info file:\nNama: {file_name}\nTipe: {content_type}\nUkuran: {file_size if file_size else 'Unknown'} bytes"
         await update.message.reply_text(info_msg)
         MAX_SIZE = 2 * 1024 * 1024 * 1024
         if file_size and file_size > MAX_SIZE:
             await update.message.reply_text("Ukuran file terlalu besar untuk di-mirror (maksimal 2GB).")
             return
-        # Simpan status pending konfirmasi
-        user_pending[chat_id] = (url, file_name)
-        reply_markup = ReplyKeyboardMarkup([['Ya', 'Tidak']], one_time_keyboard=True)
+        # Simpan status pending konfirmasi beserta info file
+        user_pending[chat_id] = (url, file_name, content_type, file_size)
+        reply_markup = ReplyKeyboardMarkup([["Ya", "Tidak"]], one_time_keyboard=True)
         await update.message.reply_text("Apakah ingin melanjutkan proses mirroring?", reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Error: {e}")
