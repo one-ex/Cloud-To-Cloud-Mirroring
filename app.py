@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update # type: ignore
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, WebhookHandler # type: ignore
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes # type: ignore
 from dotenv import load_dotenv # type: ignore
 import aria2p # type: ignore
 from google.oauth2 import service_account # type: ignore
