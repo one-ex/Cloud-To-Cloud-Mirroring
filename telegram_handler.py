@@ -1,9 +1,20 @@
-# Handler Telegram & konfirmasi user
-
-from telegram import Update, ReplyKeyboardMarkup # type: ignore
-from telegram.ext import ContextTypes # type: ignore
+import os
+import logging
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from dotenv import load_dotenv
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
+
+# Load environment variables
+load_dotenv()
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.getenv("PORT", 8080))
+
+# Setup logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 user_pending = {}
 
@@ -43,3 +54,19 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Proses mirroring dibatalkan.")
     user_pending.pop(user_id, None)
+
+def main():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
+    app.add_handler(MessageHandler(filters.Regex(r"^(Ya|Tidak)$"), confirm))
+    
+    # Jalankan webhook
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
+
+if __name__ == "__main__":
+    main()
