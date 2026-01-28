@@ -1,7 +1,7 @@
 import os
 import logging
-from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Depends # type: ignore
+from fastapi.responses import JSONResponse # type: ignore
 from contextlib import asynccontextmanager
 
 from config import settings
@@ -191,7 +191,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn # type: ignore
     
     # Run in development mode (polling)
     if settings.debug:

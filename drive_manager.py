@@ -1,12 +1,12 @@
 import io
 import os
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Generator
 from google.oauth2 import service_account # type: ignore
 from google.oauth2.credentials import Credentials # type: ignore
 from google.auth.transport.requests import Request # type: ignore
 from googleapiclient.discovery import build # type: ignore
-from googleapiclient.http import MediaIoBaseUpload # type: ignore
+from googleapiclient.http import MediaIoBaseUpload, MediaUpload # type: ignore
 from googleapiclient.errors import HttpError # type: ignore
 import httpx # type: ignore
 
@@ -65,7 +65,7 @@ class GoogleDriveManager:
     async def upload_from_url_streaming(self, url: str, filename: str, mime_type: str = None) -> Dict[str, Any]:
         """
         Download dan upload file dari URL dengan streaming langsung ke Google Drive
-        menggunakan resumable upload dengan chunking
+        menggunakan resumable upload dengan chunking tanpa menyimpan file di memory atau disk
         
         Args:
             url: URL file yang akan diupload
@@ -88,56 +88,98 @@ class GoogleDriveManager:
             
             print(f"Memulai streaming upload {filename} dari {url}...")
             
-            # Download file dengan streaming dan simpan ke file sementara
-            # Ini lebih aman untuk menghindari masalah memory
-            import tempfile
-            import shutil
-            
-            temp_dir = tempfile.mkdtemp()
-            temp_path = os.path.join(temp_dir, filename)
-            
-            try:
-                # Download file dengan streaming ke file sementara
-                async with httpx.AsyncClient() as client:
-                    async with client.stream('GET', url, follow_redirects=True, timeout=60.0) as response:
-                        response.raise_for_status()
+            # Dapatkan informasi ukuran file terlebih dahulu
+            async with httpx.AsyncClient() as client:
+                try:
+                    head_response = await client.head(url, follow_redirects=True, timeout=10.0)
+                    content_length = head_response.headers.get('content-length')
+                    total_size = int(content_length) if content_length else None
+                    
+                    if total_size:
+                        print(f"Ukuran file: {total_size} bytes ({total_size / (1024**2):.2f} MB)")
                         
-                        # Dapatkan total size jika tersedia
-                        content_length = response.headers.get('content-length')
-                        total_size = int(content_length) if content_length else None
+                        # Validasi ukuran file
+                        if total_size > settings.max_file_size_mb * 1024 * 1024:
+                            raise Exception(f"File terlalu besar: {total_size} bytes (maks: {settings.max_file_size_mb} MB)")
+                except Exception as e:
+                    print(f"Tidak dapat mendapatkan ukuran file: {e}")
+                    total_size = None
+            
+            # Buat buffer yang akan diisi secara bertahap
+            buffer = io.BytesIO()
+            
+            # Buat media upload dengan buffer kosong untuk memulai session resumable
+            media = MediaIoBaseUpload(buffer, 
+                                     mimetype=mime_type,
+                                     resumable=True)
+            
+            # Buat request upload
+            request = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, size, webViewLink'
+            )
+            
+            # Mulai upload resumable dan dapatkan session URI
+            print(f"Memulai upload resumable untuk {filename}...")
+            resumable_media = request.resumable_upload()
+            upload_url = resumable_media.uri
+            
+            print(f"Session URI didapatkan, mulai streaming download dan upload...")
+            
+            # Download dan upload secara streaming
+            chunk_size = 5 * 1024 * 1024  # 5MB per chunk
+            uploaded_bytes = 0
+            chunk_index = 0
+            
+            async with httpx.AsyncClient() as client:
+                async with client.stream('GET', url, follow_redirects=True, timeout=300.0) as response:
+                    response.raise_for_status()
+                    
+                    # Buffer untuk chunk saat ini
+                    chunk_buffer = bytearray()
+                    
+                    async for chunk in response.aiter_bytes(chunk_size):
+                        chunk_buffer.extend(chunk)
                         
-                        # Buka file untuk menulis
-                        with open(temp_path, 'wb') as f:
-                            downloaded = 0
-                            chunk_size = 2 * 1024 * 1024  # 2MB per chunk
+                        # Jika buffer sudah mencapai atau melebihi chunk_size, upload
+                        if len(chunk_buffer) >= chunk_size:
+                            chunk_index += 1
+                            print(f"Mengupload chunk {chunk_index} ({len(chunk_buffer)} bytes)...")
                             
-                            async for chunk in response.aiter_bytes(chunk_size):
-                                f.write(chunk)
-                                downloaded += len(chunk)
-                                
-                                # Tampilkan progress setiap 10MB
-                                if downloaded % (10 * 1024 * 1024) == 0:
-                                    if total_size:
-                                        percent = (downloaded / total_size) * 100
-                                        print(f"Download progress: {downloaded}/{total_size} bytes ({percent:.1f}%)")
-                                    else:
-                                        print(f"Download progress: {downloaded} bytes downloaded")
-                
-                # Upload file sementara ke Google Drive
-                print(f"Mengupload {filename} ke Google Drive...")
-                
-                with open(temp_path, 'rb') as file_stream:
-                    media = MediaIoBaseUpload(file_stream, 
-                                             mimetype=mime_type,
-                                             resumable=True)
+                            # Upload chunk ini
+                            chunk_io = io.BytesIO(chunk_buffer)
+                            resumable_media.upload(chunk_io, len(chunk_buffer))
+                            
+                            uploaded_bytes += len(chunk_buffer)
+                            chunk_buffer = bytearray()
+                            
+                            # Tampilkan progress
+                            if total_size:
+                                percent = (uploaded_bytes / total_size) * 100
+                                print(f"Progress: {uploaded_bytes}/{total_size} bytes ({percent:.1f}%)")
+                            else:
+                                print(f"Progress: {uploaded_bytes} bytes uploaded")
                     
-                    request = self.service.files().create(
-                        body=file_metadata,
-                        media_body=media,
-                        fields='id, name, size, webViewLink'
-                    )
+                    # Upload sisa data di buffer (chunk terakhir)
+                    if chunk_buffer:
+                        chunk_index += 1
+                        print(f"Mengupload chunk terakhir {chunk_index} ({len(chunk_buffer)} bytes)...")
+                        
+                        chunk_io = io.BytesIO(chunk_buffer)
+                        resumable_media.upload(chunk_io, len(chunk_buffer))
+                        
+                        uploaded_bytes += len(chunk_buffer)
+                        
+                        if total_size:
+                            percent = (uploaded_bytes / total_size) * 100
+                            print(f"Progress akhir: {uploaded_bytes}/{total_size} bytes ({percent:.1f}%)")
+                        else:
+                            print(f"Progress akhir: {uploaded_bytes} bytes uploaded")
                     
-                    file = request.execute()
+                    # Selesaikan upload
+                    print(f"Menyelesaikan upload...")
+                    file = resumable_media.finish()
                     
                     print(f"Upload berhasil: {file.get('name')} (ID: {file.get('id')})")
                     
@@ -150,18 +192,11 @@ class GoogleDriveManager:
                         'message': f"File '{filename}' berhasil diupload ke Google Drive"
                     }
                     
-            finally:
-                # Bersihkan file sementara
-                try:
-                    shutil.rmtree(temp_dir)
-                except:
-                    pass
-                
         except httpx.RequestError as e:
             raise Exception(f"Failed to download file: {str(e)}")
         except HttpError as e:
             error_details = str(e)
-            if 'quotaExceeded' in error_details:
+            if 'quotaExceeded' in error_details or 'storageQuotaExceeded' in error_details:
                 raise Exception("Google Drive quota exceeded")
             elif 'rateLimitExceeded' in error_details:
                 raise Exception("Rate limit exceeded, please try again later")
