@@ -1,7 +1,8 @@
 import multiprocessing
 
 # Worker configuration
-workers = multiprocessing.cpu_count() * 2 + 1
+# Reduce workers to avoid Telegram API flood control
+workers = 2  # Reduced from multiprocessing.cpu_count() * 2 + 1
 worker_class = 'uvicorn.workers.UvicornWorker'
 
 # Bind address
