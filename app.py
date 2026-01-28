@@ -22,8 +22,10 @@ DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Hapus integrasi aria2p dan gunakan httpx/requests untuk download streaming
+# import aria2p # type: ignore
 # Setup aria2
-aria2 = aria2p.API(aria2p.Client(host="http://localhost", port=6800, secret=""))
+# aria2 = aria2p.API(aria2p.Client(host="http://localhost", port=6800, secret=""))
 
 # Setup Google Drive API
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
@@ -44,7 +46,7 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Melanjutkan proses mirroring...")
             try:
                 # Download file dengan aria2
-                download = aria2.add_uris([url])
+                # download = aria2.add_uris([url])
                 download.wait_for_complete()
                 file_path = download.files[0].path
                 # Upload ke Google Drive ke folder khusus
