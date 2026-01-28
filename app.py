@@ -7,8 +7,9 @@ import aria2p # type: ignore
 from google.oauth2 import service_account # type: ignore
 from googleapiclient.discovery import build # type: ignore
 from googleapiclient.http import MediaFileUpload # type: ignore
-import requests
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+import requests # type: ignore
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove # type: ignore
+from telegram_handler import start, mirror, confirm
 
 # Load environment variables
 load_dotenv()
@@ -86,8 +87,9 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == "__main__":
     application = Application.builder().token(TELEGRAM_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
+    app.add_handler(CommandHandler("start", start)) # type: ignore
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror)) # type: ignore
+    app.add_handler(MessageHandler(filters.Regex("^(Ya|Tidak)$"), confirm)) # type: ignore
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
