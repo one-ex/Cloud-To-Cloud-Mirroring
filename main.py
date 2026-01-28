@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from config import settings
 from telegram_bot import telegram_bot
 from downloader import downloader
+from telegram import Update  # type: ignore
 
 # Setup logging
 logging.basicConfig(
