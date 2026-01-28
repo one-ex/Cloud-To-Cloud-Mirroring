@@ -45,6 +45,9 @@ class resumable_upload:
         url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true'
         
         logger.info(f"Menginisiasi sesi upload untuk: {filename}")
+        logger.info(f"Request URL: {url}")
+        logger.info(f"Request Headers: {json.dumps(headers, indent=2)}")
+        logger.info(f"Request Body (Metadata): {json.dumps(metadata, indent=2)}")
         response = requests.post(url, headers=headers, data=json.dumps(metadata))
         
         if response.status_code != 200:
