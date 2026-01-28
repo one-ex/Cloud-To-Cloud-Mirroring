@@ -16,7 +16,6 @@ Bot Telegram untuk mirror file dari berbagai sumber cloud ke Google Drive secara
 1. **Akun Telegram** dengan akses ke @BotFather
 2. **Akun Google Cloud** dengan Google Drive API enabled
 3. **Akun Render** untuk deployment
-4. **Python 3.9+** untuk development lokal
 
 ## Setup Langkah demi Langkah
 
@@ -103,25 +102,12 @@ Bot Telegram untuk mirror file dari berbagai sumber cloud ke Google Drive secara
 
 ### 4. Deployment ke Render
 
-#### Metode 1: Via GitHub (Recommended)
-
 1. Push code ke GitHub repository
 2. Login ke [Render Dashboard](https://dashboard.render.com/)
 3. Klik "New +" → "Web Service"
 4. Connect GitHub repository
 5. Render akan otomatis detect `render.yaml`
 6. Klik "Create Web Service"
-
-#### Metode 2: Manual Upload
-
-1. Login ke [Render Dashboard](https://dashboard.render.com/)
-2. Klik "New +" → "Web Service"
-3. Pilih "Build and deploy from a Git repository"
-4. Upload repository atau connect via Git
-5. Configure:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python main.py`
-   - **Plan:** Free
 
 ### 5. Beri Akses Folder Google Drive ke Service Account
 
@@ -158,11 +144,7 @@ Caused by: Read-only file system (os error 30)
 
 Ini disebabkan karena beberapa versi `pydantic` memerlukan toolchain Rust untuk kompilasi, yang tidak tersedia di lingkungan Render. Solusi:
 
-1. **File .python-version**: Pastikan file `.python-version` ada di root repository dengan konten:
-   ```
-   3.9.0
-   ```
-   Ini memastikan Render menggunakan Python 3.9.0 yang lebih stabil.
+1. **Environment Variable PYTHON_VERSION**: Atur environment variable `PYTHON_VERSION` di Render Dashboard dengan nilai `3.9.0`
 
 2. **Update requirements.txt**: Pastikan requirements.txt berisi:
     ```txt
@@ -179,10 +161,20 @@ Ini disebabkan karena beberapa versi `pydantic` memerlukan toolchain Rust untuk 
     beautifulsoup4==4.12.2
     pydantic==1.10.13
     httpx==0.25.1
+    gunicorn==23.0.0
     ```
     Versi 1.10.13 tidak memerlukan pydantic-core dan menggunakan binary wheel yang tidak memerlukan Rust toolchain.
 
 3. **Deploy ulang**: Setelah perubahan di-push ke GitHub, Render akan otomatis redeploy.
+
+### Error "gunicorn: command not found"
+
+Jika terjadi error saat start di Render:
+```
+bash: line 1: gunicorn: command not found
+```
+
+Pastikan `gunicorn==23.0.0` sudah ditambahkan ke requirements.txt dan build ulang.
 
 ### Error Lainnya
 
@@ -209,42 +201,7 @@ Ini disebabkan karena beberapa versi `pydantic` memerlukan toolchain Rust untuk 
 - `/help` - Menampilkan bantuan
 - `/status` - Mengecek status sistem dan quota Google Drive
 
-## Development Lokal
 
-### Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Run Development Server
-
-```bash
-# Copy environment file
-cp .env.example .env
-# Edit .env dengan konfigurasi lokal
-
-# Run in development mode
-python main.py
-```
-
-Development mode akan:
-1. Run FastAPI server di `http://localhost:8000`
-2. Run bot Telegram dalam polling mode
-3. Enable auto-reload pada code changes
-
-### Testing
-
-```bash
-# Test API endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/status
-
-# Test mirror via API
-curl -X POST http://localhost:8000/api/mirror \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com/file.zip"}'
-```
 
 ## Struktur Proyek
 
