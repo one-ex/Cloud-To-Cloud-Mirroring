@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from typing import Optional
 from pydantic import BaseSettings # type: ignore
 
@@ -32,6 +33,12 @@ class Settings(BaseSettings):
 
 # Create settings instance
 settings = Settings()
+
+# Log configuration for debugging
+logger = logging.getLogger(__name__)
+logger.info(f"Telegram webhook secret configured: {'Yes' if settings.telegram_webhook_secret else 'No'}")
+if settings.telegram_webhook_secret:
+    logger.info(f"Secret token length: {len(settings.telegram_webhook_secret)}")
 
 # Calculate max file size in bytes
 MAX_FILE_SIZE_BYTES = settings.max_file_size_mb * 1024 * 1024

@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Cloud Mirror Bot...")
     
+    # Initialize Telegram bot application
+    try:
+        await telegram_bot.initialize()
+    except Exception as e:
+        logger.error(f"Failed to initialize Telegram bot: {e}")
+    
     # Setup webhook if in production
     if not settings.debug:
         try:
@@ -106,12 +112,20 @@ async def telegram_webhook(request: Request):
         # Verify secret token if in production
         if not settings.debug and settings.telegram_webhook_secret:
             secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            logger.debug(f"Expected secret: {settings.telegram_webhook_secret}, Received: {secret_token}")
             if secret_token != settings.telegram_webhook_secret:
+                logger.warning(f"Invalid secret token: expected '{settings.telegram_webhook_secret}', got '{secret_token}'")
                 raise HTTPException(status_code=403, detail="Invalid secret token")
+        elif not settings.debug:
+            logger.warning("No telegram_webhook_secret configured in production mode!")
         
         # Process the update
         update_data = await request.json()
         update = Update.de_json(update_data, telegram_bot.application.bot)
+        
+        # Ensure application is initialized
+        if not telegram_bot.application:
+            await telegram_bot.initialize()
         
         # Process update
         await telegram_bot.application.process_update(update)

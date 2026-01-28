@@ -46,6 +46,14 @@ class TelegramBot:
             logger.error(f"Failed to initialize Telegram bot: {e}")
             raise
     
+    async def initialize(self):
+        """Initialize the application for webhook mode"""
+        if self.application:
+            await self.application.initialize()
+            logger.info("Telegram bot application initialized")
+        else:
+            logger.error("Cannot initialize: application is None")
+    
     def _register_handlers(self):
         """Register command and message handlers"""
         # Command handlers
@@ -263,6 +271,9 @@ class TelegramBot:
         webhook_url = f"{settings.app_url}/webhook"
         
         try:
+            # Initialize application first
+            await self.initialize()
+            
             await self.application.bot.set_webhook(
                 url=webhook_url,
                 secret_token=settings.telegram_webhook_secret
