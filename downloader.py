@@ -14,17 +14,14 @@ async def stream_download_to_drive(url, info):
         size = info['size']
         mime_type = info['type']
         # Mulai sesi upload ke Google Drive
-        request = resumable_upload.init_session(filename, mime_type, size)
+        session = resumable_upload.init_session(filename, mime_type, size)
         for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
             if chunk:
-                success = resumable_upload.upload_chunk(request, chunk)
+                success = resumable_upload.upload_chunk(session, chunk)
                 if not success:
                     return "Gagal upload chunk ke Google Drive."
         # Selesaikan upload
-        file_id = resumable_upload.finish_session(request)
-        if file_id:
-            return f"Berhasil mirror ke Google Drive! File ID: {file_id}"
-        else:
-            return "Gagal menyelesaikan upload ke Google Drive."
+        result = resumable_upload.finish_session(session)
+        return f"Berhasil mirror ke Google Drive! {result}"
     except Exception as e:
         return f"Error: {str(e)}"
