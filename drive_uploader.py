@@ -42,7 +42,7 @@ class resumable_upload:
             'name': filename,
             'parents': [FOLDER_ID] if FOLDER_ID else []
         }
-        url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable'
+        url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true'
         
         logger.info(f"Menginisiasi sesi upload untuk: {filename}")
         response = requests.post(url, headers=headers, data=json.dumps(metadata))
