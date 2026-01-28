@@ -3,6 +3,7 @@ import requests
 import os
 import json
 from google.oauth2 import service_account # type: ignore
+from google.auth.transport.requests import Request
 
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
@@ -13,10 +14,15 @@ creds = service_account.Credentials.from_service_account_file(
 
 class resumable_upload:
     @staticmethod
+    def _get_access_token():
+        creds.refresh(Request())
+        return creds.token
+
+    @staticmethod
     def init_session(filename, mime_type, size):
-        # Inisialisasi sesi upload dan dapatkan upload URL
+        access_token = resumable_upload._get_access_token()
         headers = {
-            'Authorization': f'Bearer {creds.token}',
+            'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json; charset=UTF-8'
         }
         metadata = {
@@ -40,10 +46,11 @@ class resumable_upload:
 
     @staticmethod
     def upload_chunk(session, chunk):
+        access_token = resumable_upload._get_access_token()
         start = session['sent_bytes']
         end = start + len(chunk) - 1
         headers = {
-            'Authorization': f'Bearer {creds.token}',
+            'Authorization': f'Bearer {access_token}',
             'Content-Type': session['mime_type'],
             'Content-Length': str(len(chunk)),
             'Content-Range': f'bytes {start}-{end}/{session["size"] if session["size"] else "*"}'
@@ -60,7 +67,4 @@ class resumable_upload:
 
     @staticmethod
     def finish_session(session):
-        # Jika upload selesai, file_id akan didapat dari response terakhir
-        # Biasanya sudah didapat pada upload_chunk terakhir dengan status 200/201
-        # Untuk keamanan, bisa cek status upload
         return 'Selesai (cek ID dari response terakhir upload_chunk)'
