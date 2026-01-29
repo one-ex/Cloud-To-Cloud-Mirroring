@@ -188,7 +188,7 @@ async def main() -> None:
     @flask_app.post(f"/{webhook_path}")
     async def webhook() -> tuple[str, int]:
         try:
-            update = Update.de_json(await request.get_json(force=True), ptb_app.bot)
+            update = Update.de_json(request.get_json(force=True), ptb_app.bot)
             await ptb_app.process_update(update)
             return "ok", 200
         except Exception as e:
