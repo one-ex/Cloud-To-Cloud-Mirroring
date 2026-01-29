@@ -181,12 +181,13 @@ if __name__ == "__main__":
     flask_app = Flask(__name__)
 
     @flask_app.route(f"/{TELEGRAM_TOKEN.split(':')[-1]}", methods=['POST'])
-    async def webhook():
+    def webhook(): # Ubah ke fungsi sinkron
         try:
             update_data = request.get_json(force=True)
             update = Update.de_json(update_data, ptb_app.bot)
             logger.info(f"Menerima update via Flask: {update_data}")
-            await ptb_app.process_update(update)
+            # Jalankan proses update secara asinkron
+            asyncio.run(ptb_app.process_update(update))
             return 'ok', 200
         except Exception as e:
             logger.error(f"Error di webhook handler Flask: {e}", exc_info=True)
@@ -195,19 +196,13 @@ if __name__ == "__main__":
     # Fungsi untuk mengatur webhook
     async def setup_webhook():
         logger.info("Mengatur webhook untuk Flask...")
-        # Menggunakan path yang lebih sederhana untuk URL webhook
         webhook_path = TELEGRAM_TOKEN.split(':')[-1]
         full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{webhook_path}"
         await ptb_app.bot.set_webhook(url=full_webhook_url, allowed_updates=Update.ALL_TYPES)
         logger.info(f"Webhook diatur ke {full_webhook_url}")
 
     # Jalankan setup webhook sekali sebelum server dimulai
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        loop.create_task(setup_webhook())
-    else:
-        loop.run_until_complete(setup_webhook())
+    asyncio.run(setup_webhook())
 
     # Jalankan server Flask
-    # Gunakan debug=False untuk produksi
     flask_app.run(host="0.0.0.0", port=PORT, debug=False)
