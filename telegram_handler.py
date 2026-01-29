@@ -127,9 +127,16 @@ async def cancel_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def debug_update_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Pembaruan mentah diterima: {update.to_json()}")
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log Errors caused by Updates."""
+    logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
+
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     
+    # Handler untuk error, harus didaftarkan
+    app.add_error_handler(error_handler)
+
     # Handler untuk debug, harus didaftarkan pertama
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
 
@@ -139,16 +146,12 @@ def main():
     app.add_handler(CallbackQueryHandler(cancel_mirror, pattern='^cancel$'))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
     
-    # Jalankan dengan metode polling untuk debug
-    logger.info("Menjalankan bot dengan metode polling untuk debug...")
-    app.run_polling()
-
-    # Kode Webhook (dinonaktifkan sementara)
-    # app.run_webhook(
-    #     listen="0.0.0.0",
-    #     port=PORT,
-    #     webhook_url=WEBHOOK_URL
-    # )
+    # Jalankan webhook
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 if __name__ == "__main__":
     main()
