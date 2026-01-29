@@ -127,6 +127,31 @@ async def cancel_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def debug_update_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Pembaruan mentah diterima: {update.to_json()}")
 
+
+async def set_webhook(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Secara manual mengatur webhook dan melaporkan hasilnya."""
+    try:
+        await context.bot.set_webhook(url=WEBHOOK_URL, allowed_updates=Update.ALL_TYPES)
+        webhook_info = await context.bot.get_webhook_info()
+        await update.message.reply_text(f"Webhook berhasil diatur ke: {webhook_info.url}\nInfo: {webhook_info}")
+        logger.info(f"Webhook diatur secara manual ke {WEBHOOK_URL}")
+    except Exception as e:
+        await update.message.reply_text(f"Gagal mengatur webhook: {e}")
+        logger.error(f"Gagal mengatur webhook: {e}")
+
+async def info_webhook(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mendapatkan informasi webhook saat ini."""
+    try:
+        webhook_info = await context.bot.get_webhook_info()
+        if webhook_info.url:
+            await update.message.reply_text(f"URL Webhook saat ini: {webhook_info.url}\nDetail: {webhook_info}")
+        else:
+            await update.message.reply_text("Tidak ada webhook yang diatur.")
+        logger.info(f"Info webhook diminta: {webhook_info}")
+    except Exception as e:
+        await update.message.reply_text(f"Gagal mendapatkan info webhook: {e}")
+        logger.error(f"Gagal mendapatkan info webhook: {e}")
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log Errors caused by Updates."""
     logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
@@ -141,6 +166,8 @@ def main():
     app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("setwebhook", set_webhook))
+    app.add_handler(CommandHandler("infowebhook", info_webhook))
     # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
     app.add_handler(CallbackQueryHandler(cancel_mirror, pattern='^cancel$'))
