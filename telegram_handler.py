@@ -88,7 +88,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     bar = '■' * filled_length + '□' * (bar_length - filled_length)
                     keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    await progress_message.edit_text(f"Progress: [{bar}] {percent}%", reply_markup=reply_markup)
+                    await progress_message.edit_text(f"Progress: [ {bar} ] {percent}%", reply_markup=reply_markup)
             except Exception as e:
                 logger.error(f"Gagal mengedit pesan progres: {e}")
 
