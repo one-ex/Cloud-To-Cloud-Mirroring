@@ -42,6 +42,9 @@ async def stream_download_to_drive(url, info, progress_callback=None):
                 await progress_callback(last_percent_reported)
 
             if chunk:
+                if progress_callback:
+                    # Check for cancellation before uploading the chunk
+                    await progress_callback(last_percent_reported)
                 success, result = resumable_upload.upload_chunk(session, chunk)
                 if not success:
                     error_msg = f"Gagal upload chunk ke Google Drive: {result}"

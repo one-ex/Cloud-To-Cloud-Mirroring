@@ -111,14 +111,17 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cancel_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer("Mencoba membatalkan...")
+    logger.info(f"User {query.from_user.id} menekan tombol batal.")
 
     context.user_data['cancel_requested'] = True
     
     download_task = context.user_data.get('download_task')
     if download_task and not download_task.done():
         download_task.cancel()
+        logger.info(f"Tugas unduhan untuk user {query.from_user.id} telah diminta untuk dibatalkan.")
         # Pesan akan diupdate menjadi 'dibatalkan' oleh blok except di fungsi confirm
     else:
+        logger.warning(f"Tidak ada tugas unduhan aktif untuk user {query.from_user.id} untuk dibatalkan.")
         await query.edit_message_text("Tidak ada proses yang aktif untuk dibatalkan atau proses sudah selesai.")
 
 def main():
