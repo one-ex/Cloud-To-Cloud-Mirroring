@@ -8,6 +8,11 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
 
 async def stream_download_to_drive(url, info, progress_callback=None, cancellation_event=None):
+    """
+    Download streaming dengan chunking 5MB dan upload ke Google Drive
+    cancellation_event: asyncio.Event untuk cancellation
+    """
+    import asyncio
     try:
         logger.info(f"Memulai stream download dari {url}")
         resp = requests.get(url, stream=True, allow_redirects=True)
@@ -36,12 +41,15 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
         final_response = None
 
         for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
-            # Cek apakah proses dibatalkan
+            # Cek apakah proses dibatalkan (async-safe)
             if cancellation_event and cancellation_event.is_set():
-                logger.info("Proses dibatalkan oleh user")
+                logger.info("Proses dibatalkan oleh user - cancellation event detected")
                 if progress_callback:
                     await progress_callback(0, error="Proses dibatalkan oleh user")
                 return "Proses dibatalkan oleh user"
+            
+            # Small delay untuk allow cancellation check
+            await asyncio.sleep(0.001)
             
             if chunk:
                 success, result = resumable_upload.upload_chunk(session, chunk)
