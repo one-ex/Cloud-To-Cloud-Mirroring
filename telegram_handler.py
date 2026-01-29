@@ -59,7 +59,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await progress_message.edit_text("✅ Proses mirroring selesai!")
                 else:
                     # Buat progress bar sederhana
-                    bar_length = 10
+                    bar_length = 20
                     filled_length = int(bar_length * percent / 100)
                     bar = '█' * filled_length + '─' * (bar_length - filled_length)
                     await progress_message.edit_text(f"Progress: [{bar}] {percent}%")
