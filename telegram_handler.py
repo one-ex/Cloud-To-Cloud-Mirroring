@@ -1,7 +1,7 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
@@ -17,109 +17,58 @@ PORT = int(os.getenv("PORT", 8080))
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Dictionary untuk menyimpan data user yang sedang menunggu konfirmasi
 user_pending = {}
-# Dictionary untuk melacak proses mirror yang sedang aktif (untuk fitur batal)
-active_mirrors = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Halo! Kirimkan URL file yang ingin di-mirror ke Google Drive.")
 
 async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-    await update.message.reply_text("🔍 Memvalidasi URL...")
-    
     valid, info = await validate_url_and_file(url)
     if not valid:
-        await update.message.reply_text(f"❌ URL/file tidak valid: {info}")
+        await update.message.reply_text(f"URL/file tidak valid: {info}")
         return
+    # Simpan status pending user
+    user_pending[update.effective_user.id] = {'url': url, 'info': info}
+    kb = ReplyKeyboardMarkup([['Ya', 'Tidak']], one_time_keyboard=True)
     
-    user_id = update.effective_user.id
-    user_pending[user_id] = {'url': url, 'info': info}
+    # Gunakan format_bytes untuk menampilkan ukuran file
+    file_size_formatted = format_bytes(info.get('size'))
     
-    kb = ReplyKeyboardMarkup([['Ya', 'Tidak']], one_time_keyboard=True, resize_keyboard=True)
-    
-    file_info = (
-        f"📝 *Informasi File:*\n"
-        f"- *Nama:* `{info.get('filename')}`\n"
-        f"- *Ukuran:* {format_bytes(info.get('size'))}\n"
-        f"- *Tipe:* `{info.get('type')}`\n\n"
-        f"Lanjutkan mirroring?"
-    )
-    
-    await update.message.reply_text(file_info, parse_mode='Markdown', reply_markup=kb)
-
-async def cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menangani klik pada tombol Batal"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    if user_id in active_mirrors:
-        active_mirrors[user_id] = True # Set flag batal ke True
-        await query.answer("Membatalkan proses...")
-        await query.edit_message_text("🛑 *Proses dihentikan oleh pengguna.*", parse_mode='Markdown')
-    else:
-        await query.answer("Proses tidak ditemukan atau sudah selesai.")
+    await update.message.reply_text(
+        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?", reply_markup=kb)
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text
-    
     if user_id not in user_pending:
+        await update.message.reply_text("Tidak ada proses yang menunggu konfirmasi.")
         return
-
-    if text.lower() == "ya":
-        data = user_pending[user_id]
-        url = data['url']
-        info = data['info']
+    
+    if update.message.text.lower() == 'ya':
+        url = user_pending[user_id]['url']
+        info = user_pending[user_id]['info']
         
-        # Inisialisasi status aktif (False berarti belum dibatalkan)
-        active_mirrors[user_id] = False
-        
-        # Buat tombol Batal
-        keyboard = [[InlineKeyboardButton("❌ Batal Mirroring", callback_query_data="cancel_mirror")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        progress_message = await update.message.reply_text(
-            "🚀 *Memulai mirroring...*", 
-            parse_mode='Markdown', 
-            reply_markup=reply_markup
-        )
+        # Kirim pesan awal yang akan diedit
+        progress_message = await update.message.reply_text("Memulai proses mirroring...")
 
-        async def progress_callback(percent, done=False, error=None):
-            # CEK FLAG BATAL: Jika user menekan tombol batal, hentikan proses
-            if active_mirrors.get(user_id) is True:
-                raise Exception("Proses dibatalkan oleh pengguna.")
-
+        async def progress_callback(percent, error=None, done=False):
             try:
                 if error:
-                    await progress_message.edit_text(f"❌ *Error:* {error}", parse_mode='Markdown')
+                    await progress_message.edit_text(f"❌ Error: {error}")
                 elif done:
-                    await progress_message.edit_text("✅ *Proses mirroring selesai!*", parse_mode='Markdown')
+                    await progress_message.edit_text("✅ Proses mirroring selesai!")
                 else:
+                    # Buat progress bar sederhana
                     bar_length = 10
                     filled_length = int(bar_length * percent / 100)
                     bar = '█' * filled_length + '─' * (bar_length - filled_length)
-                    
-                    # Update pesan progress tanpa menghilangkan tombol batal
-                    await progress_message.edit_text(
-                        f"📤 *Sedang Mengunggah...*\n\n"
-                        f"Progress: `[{bar}] {percent}%`",
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
+                    await progress_message.edit_text(f"Progress: [{bar}] {percent}%")
             except Exception as e:
-                logger.error(f"Gagal update progress: {e}")
+                logger.error(f"Gagal mengedit pesan progres: {e}")
 
-        # Jalankan proses download & upload
         result = await stream_download_to_drive(url, info, progress_callback)
-        
-        # Hapus dari daftar aktif setelah selesai/error/batal
-        active_mirrors.pop(user_id, None)
-        
-        if "dibatalkan" not in result.lower():
-            await update.message.reply_text(result)
-            
+        # Kirim hasil akhir sebagai pesan baru
+        await update.message.reply_text(result)
     else:
         await update.message.reply_text("Proses mirroring dibatalkan.")
     
@@ -127,30 +76,17 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Register Handler
     app.add_handler(CommandHandler("start", start))
-    
-    # Handler untuk tombol Inline "Batal"
-    app.add_handler(CallbackQueryHandler(cancel_callback, pattern="cancel_mirror"))
-    
-    # Handler untuk teks konfirmasi "Ya/Tidak"
+    # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
-    
-    # Handler untuk URL baru
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
     
-    logger.info("Bot started...")
-    
-    # Sesuaikan dengan mode Render (Webhook/Polling)
-    if WEBHOOK_URL:
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{WEBHOOK_URL}/webhook"
-        )
-    else:
-        app.run_polling()
+    # Jalankan webhook
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 if __name__ == "__main__":
     main()
