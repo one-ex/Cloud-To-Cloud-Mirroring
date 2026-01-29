@@ -158,13 +158,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     """Log Errors caused by Updates."""
     logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
 
-import asyncio
-from flask import Flask, request
+from hypercorn.config import Config
+from hypercorn.asyncio import serve
+from asgiref.wsgi import WsgiToAsgi
 
-# ... (kode yang ada tetap sama hingga sebelum fungsi main)
-
-if __name__ == "__main__":
-    # Inisialisasi bot
+async def main() -> None:
+    """Set up the application and run the bot with a webhook server."""
     ptb_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     # Daftarkan semua handler
@@ -177,32 +176,37 @@ if __name__ == "__main__":
     ptb_app.add_handler(CallbackQueryHandler(cancel_mirror, pattern='^cancel$'))
     ptb_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
 
-    # Inisialisasi Flask
+    await ptb_app.initialize()
+
+    webhook_path = TELEGRAM_TOKEN.split(':')[-1]
+    full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{webhook_path}"
+    await ptb_app.bot.set_webhook(url=full_webhook_url, allowed_updates=Update.ALL_TYPES)
+    logger.info(f"Webhook set to {full_webhook_url}")
+
     flask_app = Flask(__name__)
 
-    @flask_app.route(f"/{TELEGRAM_TOKEN.split(':')[-1]}", methods=['POST'])
-    def webhook(): # Ubah ke fungsi sinkron
+    @flask_app.post(f"/{webhook_path}")
+    async def webhook() -> tuple[str, int]:
         try:
-            update_data = request.get_json(force=True)
-            update = Update.de_json(update_data, ptb_app.bot)
-            logger.info(f"Menerima update via Flask: {update_data}")
-            # Jalankan proses update secara asinkron
-            asyncio.run(ptb_app.process_update(update))
-            return 'ok', 200
+            update = Update.de_json(await request.get_json(force=True), ptb_app.bot)
+            await ptb_app.process_update(update)
+            return "ok", 200
         except Exception as e:
-            logger.error(f"Error di webhook handler Flask: {e}", exc_info=True)
-            return 'error', 500
+            logger.error(f"Error in webhook handler: {e}", exc_info=True)
+            return "error", 500
 
-    # Fungsi untuk mengatur webhook
-    async def setup_webhook():
-        logger.info("Mengatur webhook untuk Flask...")
-        webhook_path = TELEGRAM_TOKEN.split(':')[-1]
-        full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{webhook_path}"
-        await ptb_app.bot.set_webhook(url=full_webhook_url, allowed_updates=Update.ALL_TYPES)
-        logger.info(f"Webhook diatur ke {full_webhook_url}")
+    asgi_app = WsgiToAsgi(flask_app)
 
-    # Jalankan setup webhook sekali sebelum server dimulai
-    asyncio.run(setup_webhook())
+    config = Config()
+    config.bind = [f"0.0.0.0:{PORT}"]
+    
+    logger.info(f"Starting Hypercorn server on {config.bind[0]}")
+    await serve(asgi_app, config)
 
-    # Jalankan server Flask
-    flask_app.run(host="0.0.0.0", port=PORT, debug=False)
+    await ptb_app.shutdown()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot stopped.")

@@ -7,3 +7,5 @@ aria2p
 python-dotenv
 requests
 Flask
+hypercorn
+asgiref
