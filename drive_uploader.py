@@ -8,7 +8,7 @@ from google.auth.transport.requests import Request
 logger = logging.getLogger(__name__)
 
 # Scope yang digunakan saat membuat token.json -- sebaiknya full drive untuk kemudahan
-SCOPES = ['https://www.googleapis.com/auth/drive']
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 # Path ke token.json yang dihasilkan oleh flow OAuth (set di environment)
 OAUTH_TOKEN_FILE = os.getenv('GOOGLE_OAUTH_TOKEN_FILE', 'token.json')
