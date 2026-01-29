@@ -6,3 +6,4 @@ google-auth-oauthlib
 aria2p
 python-dotenv
 requests
+Flask
