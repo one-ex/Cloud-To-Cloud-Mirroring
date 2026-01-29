@@ -51,9 +51,18 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Kirim pesan awal yang akan diedit
         progress_message = await update.message.reply_text("Memulai proses mirroring...")
 
+        last_reported_percentage = -1
+
         async def progress_callback(percent, error=None, done=False):
+            nonlocal last_reported_percentage
             if context.user_data.get('cancel_requested'):
                 raise DownloadCancelled("Proses dibatalkan oleh pengguna.")
+
+            current_percentage = int(percent)
+            if current_percentage <= last_reported_percentage and not done and not error:
+                return
+            
+            last_reported_percentage = current_percentage
 
             try:
                 if error:
@@ -62,14 +71,18 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     await progress_message.edit_text("✅ Proses mirroring selesai!")
                 else:
                     bar_length = 20
-                    filled_length = int(bar_length * percent / 100)
+                    filled_length = int(bar_length * current_percentage / 100)
                     bar = '█' * filled_length + '─' * (bar_length - filled_length)
                     await progress_message.edit_text(
-                        f"Progress: [{bar}] {percent}%",
+                        f"Progress: [{bar}] {current_percentage}%",
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Batal", callback_data="cancel")]])
                     )
             except Exception as e:
-                logger.error(f"Gagal mengedit pesan progres: {e}")
+                # Log "Message is not modified" errors at a lower level to avoid clutter
+                if "Message is not modified" in str(e):
+                    logger.debug(f"Pesan tidak diubah: {e}")
+                else:
+                    logger.error(f"Gagal mengedit pesan progres: {e}")
 
         context.user_data['cancel_requested'] = False
         download_task = asyncio.create_task(
