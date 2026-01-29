@@ -45,8 +45,8 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
             if cancellation_event and cancellation_event.is_set():
                 logger.info("Proses dibatalkan oleh user - cancellation event detected")
                 if progress_callback:
-                    await progress_callback(0, error="Proses dibatalkan oleh user")
-                return "Proses dibatalkan oleh user"
+                    await progress_callback(0, cancelled=True, message="Proses dihentikan oleh user")
+                return "Proses dihentikan oleh user"
             
             # Small delay untuk allow cancellation check
             await asyncio.sleep(0.001)

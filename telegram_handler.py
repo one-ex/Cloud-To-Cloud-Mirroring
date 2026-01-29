@@ -65,9 +65,15 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'user_id': user_id
         }
 
-        async def progress_callback(percent, error=None, done=False):
+        async def progress_callback(percent, error=None, done=False, cancelled=False, message=""):
             try:
-                if error:
+                if cancelled:
+                    # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
+                    await progress_message.edit_text(f"🛑 {message}")
+                    # Hapus dari proses yang sedang berjalan
+                    user_processes.pop(user_id, None)
+                elif error:
+                    # Untuk error sesungguhnya - pakai "❌ Error:"
                     await progress_message.edit_text(f"❌ Error: {error}")
                     # Hapus dari proses yang sedang berjalan
                     user_processes.pop(user_id, None)
@@ -79,7 +85,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Buat progress bar sederhana dengan tombol stop
                     bar_length = 20
                     filled_length = int(bar_length * percent / 100)
-                    bar = '█' * filled_length + '─' * (bar_length - filled_length)
+                    bar = '■' * filled_length + '□' * (bar_length - filled_length)
                     keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     await progress_message.edit_text(f"Progress: [{bar}] {percent}%", reply_markup=reply_markup)
@@ -127,10 +133,11 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Set event untuk memberhentikan proses
         cancellation_event.set()
         
-        # Update pesan dengan status berhenti
-        await query.edit_message_text("🛑 Proses mirroring dihentikan...")
+        # Update pesan dengan status berhenti - tidak pakai "Error" untuk cancellation
+        await query.edit_message_text("✅ Proses dihentikan oleh user")
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
+        logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
         
     except Exception as e:
