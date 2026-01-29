@@ -1,8 +1,9 @@
 # Download streaming dengan chunking 5MB dan upload ke Google Drive
 
-import requests
+import requests # type: ignore
 import logging
 from drive_uploader import resumable_upload
+from utils import DownloadCancelled
 
 logger = logging.getLogger(__name__)
 CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
@@ -36,6 +37,10 @@ async def stream_download_to_drive(url, info, progress_callback=None):
         final_response = None
 
         for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+            if progress_callback:
+                # This call allows the callback to raise DownloadCancelled
+                await progress_callback(last_percent_reported)
+
             if chunk:
                 success, result = resumable_upload.upload_chunk(session, chunk)
                 if not success:
@@ -51,7 +56,7 @@ async def stream_download_to_drive(url, info, progress_callback=None):
                 sent_bytes += len(chunk)
                 if size and size > 0:
                     percent = int((sent_bytes / size) * 100)
-                    if percent >= last_percent_reported + 10 or percent == 100:
+                    if percent >= last_percent_reported + 5 or percent == 100:
                         last_percent_reported = percent
                         logger.info(f"Progress: {percent}%")
                         if progress_callback:
@@ -65,6 +70,8 @@ async def stream_download_to_drive(url, info, progress_callback=None):
         logger.info(success_msg)
         return success_msg
 
+    except DownloadCancelled:
+        raise  # Re-raise to be handled by telegram_handler
     except Exception as e:
         error_msg = f"Error selama proses stream: {e}"
         logger.exception(error_msg)
