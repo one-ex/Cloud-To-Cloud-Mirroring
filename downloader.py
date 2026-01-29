@@ -7,7 +7,7 @@ from drive_uploader import resumable_upload
 logger = logging.getLogger(__name__)
 CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
 
-async def stream_download_to_drive(url, info, progress_callback=None):
+async def stream_download_to_drive(url, info, progress_callback=None, cancellation_event=None):
     try:
         logger.info(f"Memulai stream download dari {url}")
         resp = requests.get(url, stream=True, allow_redirects=True)
@@ -36,6 +36,13 @@ async def stream_download_to_drive(url, info, progress_callback=None):
         final_response = None
 
         for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+            # Cek apakah proses dibatalkan
+            if cancellation_event and cancellation_event.is_set():
+                logger.info("Proses dibatalkan oleh user")
+                if progress_callback:
+                    await progress_callback(0, error="Proses dibatalkan oleh user")
+                return "Proses dibatalkan oleh user"
+            
             if chunk:
                 success, result = resumable_upload.upload_chunk(session, chunk)
                 if not success:

@@ -1,7 +1,8 @@
 import os
 import logging
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import threading
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
@@ -18,6 +19,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 user_pending = {}
+user_processes = {}  # Track proses yang sedang berjalan
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Halo! Kirimkan URL file yang ingin di-mirror ke Google Drive.")
@@ -48,25 +50,42 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = user_pending[user_id]['url']
         info = user_pending[user_id]['info']
         
-        # Kirim pesan awal yang akan diedit
-        progress_message = await update.message.reply_text("Memulai proses mirroring...")
+        # Buat cancellation event untuk proses ini
+        cancellation_event = threading.Event()
+        
+        # Kirim pesan awal dengan tombol Stop
+        keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        progress_message = await update.message.reply_text("Memulai proses mirroring...", reply_markup=reply_markup)
+
+        # Simpan info proses yang sedang berjalan
+        user_processes[user_id] = {
+            'cancellation_event': cancellation_event,
+            'progress_message': progress_message
+        }
 
         async def progress_callback(percent, error=None, done=False):
             try:
                 if error:
                     await progress_message.edit_text(f"❌ Error: {error}")
+                    # Hapus dari proses yang sedang berjalan
+                    user_processes.pop(user_id, None)
                 elif done:
                     await progress_message.edit_text("✅ Proses mirroring selesai!")
+                    # Hapus dari proses yang sedang berjalan
+                    user_processes.pop(user_id, None)
                 else:
-                    # Buat progress bar sederhana
+                    # Buat progress bar sederhana dengan tombol stop
                     bar_length = 20
                     filled_length = int(bar_length * percent / 100)
                     bar = '█' * filled_length + '─' * (bar_length - filled_length)
-                    await progress_message.edit_text(f"Progress: [{bar}] {percent}%")
+                    keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await progress_message.edit_text(f"Progress: [{bar}] {percent}%", reply_markup=reply_markup)
             except Exception as e:
                 logger.error(f"Gagal mengedit pesan progres: {e}")
 
-        result = await stream_download_to_drive(url, info, progress_callback)
+        result = await stream_download_to_drive(url, info, progress_callback, cancellation_event)
         # Kirim hasil akhir sebagai pesan baru
         await update.message.reply_text(result)
     else:
@@ -74,12 +93,40 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_pending.pop(user_id, None)
 
+async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk tombol Stop Mirroring"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # Jawab callback query
+    await query.answer()
+    
+    # Cek apakah user memiliki proses yang sedang berjalan
+    if user_id not in user_processes:
+        await query.edit_message_text("Tidak ada proses mirroring yang sedang berjalan.")
+        return
+    
+    # Tandai cancellation event
+    process_info = user_processes[user_id]
+    cancellation_event = process_info['cancellation_event']
+    
+    # Set event untuk memberhentikan proses
+    cancellation_event.set()
+    
+    # Update pesan
+    await query.edit_message_text("🛑 Proses mirroring dihentikan...")
+    
+    # Hapus dari daftar proses (akan dihapus sepenuhnya setelah proses berhenti)
+    # Note: Proses akan dihapus dari user_processes di progress_callback saat error
+
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
+    # Handler untuk tombol Stop
+    app.add_handler(CallbackQueryHandler(stop_mirror, pattern="^stop_mirror$"))
     
     # Jalankan webhook
     app.run_webhook(
