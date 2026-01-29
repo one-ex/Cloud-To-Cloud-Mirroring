@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup  # type: ignore
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler  # type: ignore
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, TypeHandler  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
@@ -124,8 +124,15 @@ async def cancel_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.warning(f"Tidak ada tugas unduhan aktif untuk user {query.from_user.id} untuk dibatalkan.")
         await query.edit_message_text("Tidak ada proses yang aktif untuk dibatalkan atau proses sudah selesai.")
 
+async def debug_update_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Pembaruan mentah diterima: {update.to_json()}")
+
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Handler untuk debug, harus didaftarkan pertama
+    app.add_handler(TypeHandler(Update, debug_update_handler), group=-1)
+
     app.add_handler(CommandHandler("start", start))
     # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
