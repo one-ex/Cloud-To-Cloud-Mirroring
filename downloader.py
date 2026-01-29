@@ -1,6 +1,6 @@
 # Download streaming dengan chunking 5MB dan upload ke Google Drive
 
-import requests
+import requests # type: ignore
 import logging
 from drive_uploader import resumable_upload
 

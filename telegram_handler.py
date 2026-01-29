@@ -1,9 +1,9 @@
 import os
 import logging
 import asyncio
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from dotenv import load_dotenv
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup # type: ignore
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler # type: ignore
+from dotenv import load_dotenv # type: ignore
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
 from utils import format_bytes
@@ -69,7 +69,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if cancelled:
                     # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
-                    await progress_message.edit_text(f"🛑 {message}")
+                    await progress_message.edit_text(f"✅ {message}")
                     # Hapus dari proses yang sedang berjalan
                     user_processes.pop(user_id, None)
                 elif error:
@@ -137,7 +137,6 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("✅ Proses dihentikan oleh user")
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
-        logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
         
     except Exception as e:
