@@ -34,20 +34,6 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Gunakan format_bytes untuk menampilkan ukuran file
     file_size_formatted = format_bytes(info.get('size'))
     
-    # Siapkan informasi hash jika tersedia
-    hash_info = info.get('hash', {})
-    hash_text = ""
-    if hash_info:
-        hash_parts = []
-        if 'md5' in hash_info:
-            hash_parts.append(f"MD5: {hash_info['md5'][:8]}...{hash_info['md5'][-8:]}")
-        if 'sha1' in hash_info:
-            hash_parts.append(f"SHA1: {hash_info['sha1'][:8]}...{hash_info['sha1'][-8:]}")
-        if 'sha256' in hash_info:
-            hash_parts.append(f"SHA256: {hash_info['sha256'][:8]}...{hash_info['sha256'][-8:]}")
-        if hash_parts:
-            hash_text = "\nHash: " + ", ".join(hash_parts)
-    
     # Buat inline keyboard untuk konfirmasi
     keyboard = [
         [InlineKeyboardButton("✅ Ya", callback_data="confirm_yes"),
@@ -57,7 +43,7 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Kirim pesan dengan inline keyboard dan simpan data ke pending
     message = await update.message.reply_text(
-        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}{hash_text}\nLanjutkan mirroring?",
+        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?",
         reply_markup=reply_markup
     )
     
