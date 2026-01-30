@@ -117,10 +117,18 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         return
                     
                     if cancelled:
-                        # Tampilkan pesan pembatalan dan bersihkan proses
-                        await progress_message.edit_text("❌ Proses mirroring dibatalkan.")
+                        # Tandai sebelum edit untuk mencegah race condition
                         if user_id in user_processes:
                             user_processes[user_id]['message_edited'] = True
+                        
+                        # Tampilkan pesan pembatalan
+                        try:
+                            await progress_message.edit_text("❌ Proses mirroring dibatalkan.")
+                        except Exception as e:
+                            logger.warning(f"Gagal mengedit pesan pembatalan: {e}")
+                        
+                        # Hapus dari proses setelah edit berhasil
+                        if user_id in user_processes:
                             user_processes.pop(user_id, None)
                     elif error:
                         # Untuk error sesungguhnya - pakai "❌ Error:"
@@ -214,18 +222,12 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Tandai cancellation event
         process_info = user_processes[user_id]
         cancellation_event = process_info['cancellation_event']
-        progress_message = process_info['progress_message']
         
         # Set event untuk memberhentikan proses
         cancellation_event.set()
         
-        # Beri sedikit waktu agar downloader mengecek cancellation event
-        await asyncio.sleep(0.1)
-        
-        # Jika pesan masih belum di-edit (downloader tidak sempat memanggil callback), edit manual
-        if user_id in user_processes and not user_processes[user_id].get('message_edited', False):
-            await progress_message.edit_text("❌ Proses mirroring dibatalkan.")
-            user_processes.pop(user_id, None)
+        # Pesan pembatalan akan ditangani oleh progress_callback di downloader.py
+        # Tidak perlu edit manual di sini untuk menghindari duplikasi
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
