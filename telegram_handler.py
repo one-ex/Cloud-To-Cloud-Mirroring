@@ -76,7 +76,7 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         
         if query.data == "confirm_yes":
             # Update pesan konfirmasi menjadi status memulai
-            await query.edit_message_text("✅ Memulai proses mirroring...")
+            await query.edit_message_text("⌛ Memulai proses mirroring ⌛")
             
             # Buat cancellation event untuk proses ini (async-compatible)
             cancellation_event = asyncio.Event()
@@ -101,16 +101,16 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     if cancelled:
                         # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
-                        await progress_message.edit_text(f"✅ {message}")
+                        await progress_message.edit_text(f"⚠️ {message} ⚠️")
                         # Hapus dari proses yang sedang berjalan
                         user_processes.pop(user_id, None)
                     elif error:
                         # Untuk error sesungguhnya - pakai "❌ Error:"
-                        await progress_message.edit_text(f"❌ Error: {error}")
+                        await progress_message.edit_text(f"🚨 Error: {error} 🚨")
                         # Hapus dari proses yang sedang berjalan
                         user_processes.pop(user_id, None)
                     elif done:
-                        await progress_message.edit_text("✅ Proses mirroring selesai!")
+                        await progress_message.edit_text("✅ Proses mirroring selesai ✅")
                         # Hapus dari proses yang sedang berjalan
                         user_processes.pop(user_id, None)
                     else:
@@ -149,7 +149,7 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     logger.error(f"Error dalam proses mirroring: {e}")
                     await context.bot.send_message(
                         chat_id=query.message.chat_id,
-                        text=f"❌ Error: {str(e)}"
+                        text=f"🚨 Error: {str(e)} 🚨"
                     )
                     user_processes.pop(user_id, None)
 

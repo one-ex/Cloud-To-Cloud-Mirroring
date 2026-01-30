@@ -7,7 +7,7 @@ from drive_uploader import resumable_upload
 from utils import format_bytes, format_time, format_speed, calculate_eta
 
 logger = logging.getLogger(__name__)
-CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
+CHUNK_SIZE = 10 * 1024 * 1024  
 
 async def stream_download_to_drive(url, info, progress_callback=None, cancellation_event=None):
     """
