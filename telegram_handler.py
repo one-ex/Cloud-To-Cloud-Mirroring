@@ -212,9 +212,16 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Tandai cancellation event
         process_info = user_processes[user_id]
         cancellation_event = process_info['cancellation_event']
+        progress_message = process_info['progress_message']
         
         # Set event untuk memberhentikan proses
         cancellation_event.set()
+        
+        # Update pesan progres menjadi pesan pembatalan
+        await progress_message.edit_text("⏹ Proses mirroring dihentikan oleh user.")
+        
+        # Hapus dari proses yang sedang berjalan
+        user_processes.pop(user_id, None)
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
