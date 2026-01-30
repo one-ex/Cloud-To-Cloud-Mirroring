@@ -117,9 +117,11 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         return
                     
                     if cancelled:
-                        # Skip edit di sini, biarkan stop_mirror yang handle pesan
-                        # Tandai pesan sudah di-edit untuk mencegah race condition
-                        user_processes[user_id]['message_edited'] = True
+                        # Tampilkan pesan pembatalan dan bersihkan proses
+                        await progress_message.edit_text("❌ Proses mirroring dibatalkan.")
+                        if user_id in user_processes:
+                            user_processes[user_id]['message_edited'] = True
+                            user_processes.pop(user_id, None)
                     elif error:
                         # Untuk error sesungguhnya - pakai "❌ Error:"
                         await progress_message.edit_text(f"❌ Error: {error}")
@@ -217,11 +219,13 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Set event untuk memberhentikan proses
         cancellation_event.set()
         
-        # Update pesan progres menjadi pesan pembatalan
-        await progress_message.edit_text("⏹ Proses mirroring dihentikan oleh user.")
+        # Beri sedikit waktu agar downloader mengecek cancellation event
+        await asyncio.sleep(0.1)
         
-        # Hapus dari proses yang sedang berjalan
-        user_processes.pop(user_id, None)
+        # Jika pesan masih belum di-edit (downloader tidak sempat memanggil callback), edit manual
+        if user_id in user_processes and not user_processes[user_id].get('message_edited', False):
+            await progress_message.edit_text("❌ Proses mirroring dibatalkan.")
+            user_processes.pop(user_id, None)
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
