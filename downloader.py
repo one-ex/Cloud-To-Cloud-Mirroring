@@ -66,7 +66,7 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
                 sent_bytes += len(chunk)
                 if size and size > 0:
                     percent = int((sent_bytes / size) * 100)
-                    if percent >= last_percent_reported + 5 or percent == 100:
+                    if percent >= last_percent_reported + 0.1 or percent == 100:
                         last_percent_reported = percent
                         logger.info(f"Progress: {percent}%")
                         if progress_callback:

@@ -18,7 +18,7 @@ PORT = int(os.getenv("PORT", 8080))
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-user_pending = {}
+user_pending = {}  # Simpan status pending user dengan inline keyboard
 user_processes = {}  # Track proses yang sedang berjalan
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -30,87 +30,133 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not valid:
         await update.message.reply_text(f"URL/file tidak valid: {info}")
         return
-    # Simpan status pending user
-    user_pending[update.effective_user.id] = {'url': url, 'info': info}
-    kb = ReplyKeyboardMarkup([['Ya', 'Tidak']], one_time_keyboard=True)
     
     # Gunakan format_bytes untuk menampilkan ukuran file
     file_size_formatted = format_bytes(info.get('size'))
     
-    await update.message.reply_text(
-        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?", reply_markup=kb)
-
-async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in user_pending:
-        await update.message.reply_text("Tidak ada proses yang menunggu konfirmasi.")
-        return
+    # Buat inline keyboard untuk konfirmasi
+    keyboard = [
+        [InlineKeyboardButton("✅ Ya", callback_data="confirm_yes"),
+         InlineKeyboardButton("❌ Tidak", callback_data="confirm_no")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if update.message.text.lower() == 'ya':
-        url = user_pending[user_id]['url']
-        info = user_pending[user_id]['info']
-        
-        # Buat cancellation event untuk proses ini (async-compatible)
-        cancellation_event = asyncio.Event()
-        
-        # Kirim pesan awal dengan tombol Stop
-        keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        progress_message = await update.message.reply_text("Memulai proses mirroring...", reply_markup=reply_markup)
-
-        # Simpan info proses yang sedang berjalan
-        user_processes[user_id] = {
-            'cancellation_event': cancellation_event,
-            'progress_message': progress_message,
-            'user_id': user_id
-        }
-
-        async def progress_callback(percent, error=None, done=False, cancelled=False, message=""):
-            try:
-                if cancelled:
-                    # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
-                    await progress_message.edit_text(f"✅ {message}")
-                    # Hapus dari proses yang sedang berjalan
-                    user_processes.pop(user_id, None)
-                elif error:
-                    # Untuk error sesungguhnya - pakai "❌ Error:"
-                    await progress_message.edit_text(f"❌ Error: {error}")
-                    # Hapus dari proses yang sedang berjalan
-                    user_processes.pop(user_id, None)
-                elif done:
-                    await progress_message.edit_text("✅ Proses mirroring selesai!")
-                    # Hapus dari proses yang sedang berjalan
-                    user_processes.pop(user_id, None)
-                else:
-                    # Buat progress bar sederhana dengan tombol stop
-                    bar_length = 20
-                    filled_length = int(bar_length * percent / 100)
-                    bar = '■' * filled_length + '□' * (bar_length - filled_length)
-                    keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await progress_message.edit_text(f"Progress: [ {bar} ] {percent}%", reply_markup=reply_markup)
-            except Exception as e:
-                logger.error(f"Gagal mengedit pesan progres: {e}")
-
-        # Jalankan mirroring di background task
-        async def run_mirror():
-            try:
-                result = await stream_download_to_drive(url, info, progress_callback, cancellation_event)
-                # Kirim hasil akhir sebagai pesan baru jika belum di-handle di callback
-                if user_id in user_processes:  # Jika belum dihapus (tidak error/done)
-                    await update.message.reply_text(result)
-                    user_processes.pop(user_id, None)
-            except Exception as e:
-                logger.error(f"Error dalam proses mirroring: {e}")
-                await update.message.reply_text(f"❌ Error: {str(e)}")
-                user_processes.pop(user_id, None)
-
-        # Jalankan task secara async
-        asyncio.create_task(run_mirror())
-    else:
-        await update.message.reply_text("Proses mirroring dibatalkan.")
+    # Kirim pesan dengan inline keyboard dan simpan data ke pending
+    message = await update.message.reply_text(
+        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?",
+        reply_markup=reply_markup
+    )
     
-    user_pending.pop(user_id, None)
+    # Simpan status pending user dengan message_id untuk edit nanti
+    user_pending[update.effective_user.id] = {
+        'url': url, 
+        'info': info,
+        'message_id': message.message_id,
+        'chat_id': message.chat_id
+    }
+
+async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk tombol konfirmasi inline keyboard"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Jawab callback query
+        await query.answer()
+        
+        # Cek apakah user memiliki proses yang menunggu konfirmasi
+        if user_id not in user_pending:
+            await query.edit_message_text("Tidak ada proses yang menunggu konfirmasi.")
+            return
+        
+        # Ambil data dari pending
+        pending_data = user_pending[user_id]
+        url = pending_data['url']
+        info = pending_data['info']
+        
+        if query.data == "confirm_yes":
+            # Update pesan konfirmasi menjadi status memulai
+            await query.edit_message_text("✅ Memulai proses mirroring...")
+            
+            # Buat cancellation event untuk proses ini (async-compatible)
+            cancellation_event = asyncio.Event()
+            
+            # Kirim pesan awal dengan tombol Stop
+            keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            progress_message = await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="Memulai proses mirroring...",
+                reply_markup=reply_markup
+            )
+
+            # Simpan info proses yang sedang berjalan
+            user_processes[user_id] = {
+                'cancellation_event': cancellation_event,
+                'progress_message': progress_message,
+                'user_id': user_id
+            }
+
+            async def progress_callback(percent, error=None, done=False, cancelled=False, message=""):
+                try:
+                    if cancelled:
+                        # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
+                        await progress_message.edit_text(f"✅ {message}")
+                        # Hapus dari proses yang sedang berjalan
+                        user_processes.pop(user_id, None)
+                    elif error:
+                        # Untuk error sesungguhnya - pakai "❌ Error:"
+                        await progress_message.edit_text(f"❌ Error: {error}")
+                        # Hapus dari proses yang sedang berjalan
+                        user_processes.pop(user_id, None)
+                    elif done:
+                        await progress_message.edit_text("✅ Proses mirroring selesai!")
+                        # Hapus dari proses yang sedang berjalan
+                        user_processes.pop(user_id, None)
+                    else:
+                        # Buat progress bar sederhana dengan tombol stop
+                        bar_length = 10
+                        filled_length = int(bar_length * percent / 100)
+                        bar = '■' * filled_length + '□' * (bar_length - filled_length)
+                        keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        await progress_message.edit_text(f"Progress: [ {bar} ] {percent}%", reply_markup=reply_markup)
+                except Exception as e:
+                    logger.error(f"Gagal mengedit pesan progres: {e}")
+
+            # Jalankan mirroring di background task
+            async def run_mirror():
+                try:
+                    result = await stream_download_to_drive(url, info, progress_callback, cancellation_event)
+                    # Kirim hasil akhir sebagai pesan baru jika belum di-handle di callback
+                    if user_id in user_processes:  # Jika belum dihapus (tidak error/done)
+                        await context.bot.send_message(
+                            chat_id=query.message.chat_id,
+                            text=result
+                        )
+                        user_processes.pop(user_id, None)
+                except Exception as e:
+                    logger.error(f"Error dalam proses mirroring: {e}")
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"❌ Error: {str(e)}"
+                    )
+                    user_processes.pop(user_id, None)
+
+            # Jalankan task secara async
+            asyncio.create_task(run_mirror())
+            
+        elif query.data == "confirm_no":
+            # Update pesan konfirmasi menjadi dibatalkan
+            await query.edit_message_text("❌ Proses mirroring dibatalkan.")
+        
+        # Hapus dari pending setelah diproses
+        user_pending.pop(user_id, None)
+        
+    except Exception as e:
+        logger.error(f"Error dalam handle_confirm_callback: {e}")
+        await query.edit_message_text("❌ Terjadi kesalahan saat memproses konfirmasi.")
+        user_pending.pop(user_id, None)
 
 async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler untuk tombol Stop Mirroring"""
@@ -155,11 +201,12 @@ def main():
     app.add_handler(MessageHandler(filters.ALL, log_updates), group=-1)
     
     app.add_handler(CommandHandler("start", start))
-    # Handler konfirmasi harus diprioritaskan sebelum handler teks umum
-    app.add_handler(MessageHandler(filters.Regex(r"(?i)^(Ya|Tidak)$"), confirm))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
+    # Handler untuk konfirmasi inline keyboard
+    app.add_handler(CallbackQueryHandler(handle_confirm_callback, pattern="^(confirm_yes|confirm_no)$"))
     # Handler untuk tombol Stop
     app.add_handler(CallbackQueryHandler(stop_mirror, pattern="^stop_mirror$"))
+    # Handler umum untuk teks (URL)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mirror))
     
     # Jalankan webhook dengan path yang jelas
     logger.info(f"🚀 Starting webhook on port {PORT}")
