@@ -94,31 +94,24 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
             user_processes[user_id] = {
                 'cancellation_event': cancellation_event,
                 'progress_message': progress_message,
-                'user_id': user_id,
-                'message_edited': False  # Flag untuk cegah duplikasi edit
+                'user_id': user_id
             }
 
             async def progress_callback(percent, error=None, done=False, cancelled=False, message=""):
                 try:
-                    # Cek apakah pesan sudah pernah di-edit atau user sudah tidak ada di proses
-                    if user_id not in user_processes or user_processes[user_id].get('message_edited', False):
-                        return
-                    
                     if cancelled:
                         # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
                         await progress_message.edit_text(f"✅ {message}")
-                        # Tandai pesan sudah di-edit (tapi jangan hapus dulu, biarkan stop_mirror yang handle)
-                        user_processes[user_id]['message_edited'] = True
+                        # Hapus dari proses yang sedang berjalan
+                        user_processes.pop(user_id, None)
                     elif error:
                         # Untuk error sesungguhnya - pakai "❌ Error:"
                         await progress_message.edit_text(f"❌ Error: {error}")
-                        # Tandai pesan sudah di-edit dan hapus dari proses yang sedang berjalan
-                        user_processes[user_id]['message_edited'] = True
+                        # Hapus dari proses yang sedang berjalan
                         user_processes.pop(user_id, None)
                     elif done:
                         await progress_message.edit_text("✅ Proses mirroring selesai!")
-                        # Tandai pesan sudah di-edit dan hapus dari proses yang sedang berjalan
-                        user_processes[user_id]['message_edited'] = True
+                        # Hapus dari proses yang sedang berjalan
                         user_processes.pop(user_id, None)
                     else:
                         # Buat progress bar sederhana dengan tombol stop
@@ -185,20 +178,6 @@ async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Set event untuk memberhentikan proses
         cancellation_event.set()
-        
-        # Edit pesan progress untuk menunjukkan proses dihentikan
-        # Tapi cek dulu apakah sudah pernah di-edit
-        if not process_info.get('message_edited', False):
-            try:
-                progress_message = process_info['progress_message']
-                await progress_message.edit_text("✅ Proses dihentikan oleh user")
-            except Exception as e:
-                # Jika gagal edit (misalnya sudah di-edit oleh progress_callback), abaikan saja
-                logger.info(f"Pesan progress sudah di-update oleh progress_callback: {e}")
-        
-        # Bersihkan user dari proses (tapi progress_callback mungkin sudah melakukannya untuk cancelled)
-        if user_id in user_processes:
-            user_processes.pop(user_id, None)
         
         logger.info(f"User {user_id} menghentikan proses mirroring")
         logger.info(f"Cancellation event status: {cancellation_event.is_set()}")
