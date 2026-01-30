@@ -34,6 +34,11 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Gunakan format_bytes untuk menampilkan ukuran file
     file_size_formatted = format_bytes(info.get('size'))
     
+    # Kirim pesan pertama: Informasi file
+    info_message = await update.message.reply_text(
+        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}"
+    )
+    
     # Buat inline keyboard untuk konfirmasi
     keyboard = [
         [InlineKeyboardButton("✅ Ya", callback_data="confirm_yes"),
@@ -41,9 +46,9 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Kirim pesan dengan inline keyboard dan simpan data ke pending
-    message = await update.message.reply_text(
-        f"File: {info['filename']}\nUkuran: {file_size_formatted}\nTipe: {info['type']}\nLanjutkan mirroring?",
+    # Kirim pesan kedua: Konfirmasi dengan inline keyboard
+    confirm_message = await update.message.reply_text(
+        "Lanjutkan mirroring?",
         reply_markup=reply_markup
     )
     
@@ -51,8 +56,9 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_pending[update.effective_user.id] = {
         'url': url, 
         'info': info,
-        'message_id': message.message_id,
-        'chat_id': message.chat_id
+        'info_message_id': info_message.message_id,
+        'confirm_message_id': confirm_message.message_id,
+        'chat_id': confirm_message.chat_id
     }
 
 async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,8 +81,14 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         info = pending_data['info']
         
         if query.data == "confirm_yes":
-            # Update pesan konfirmasi menjadi status memulai
-            await query.edit_message_text("⌛ Memulai proses mirroring ⌛")
+            # Hapus pesan konfirmasi (pesan kedua), biarkan pesan info tetap ada
+            await query.delete_message()
+            
+            # Kirim pesan status memulai
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="⌛ Memulai proses mirroring ⌛"
+            )
             
             # Buat cancellation event untuk proses ini (async-compatible)
             cancellation_event = asyncio.Event()
@@ -94,24 +106,30 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
             user_processes[user_id] = {
                 'cancellation_event': cancellation_event,
                 'progress_message': progress_message,
-                'user_id': user_id
+                'user_id': user_id,
+                'message_edited': False  # Flag untuk cegah duplikasi edit
             }
 
             async def progress_callback(percent, error=None, done=False, cancelled=False, message="", downloaded=0, total=0, speed=0, eta=None, elapsed=0, filename=""):
                 try:
+                    # Cek apakah pesan sudah pernah di-edit atau user sudah tidak ada di proses
+                    if user_id not in user_processes or user_processes[user_id].get('message_edited', False):
+                        return
+                    
                     if cancelled:
-                        # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
-                        await progress_message.edit_text(f"⚠️ {message} ⚠️")
-                        # Hapus dari proses yang sedang berjalan
-                        user_processes.pop(user_id, None)
+                        # Skip edit di sini, biarkan stop_mirror yang handle pesan
+                        # Tandai pesan sudah di-edit untuk mencegah race condition
+                        user_processes[user_id]['message_edited'] = True
                     elif error:
                         # Untuk error sesungguhnya - pakai "❌ Error:"
-                        await progress_message.edit_text(f"🚨 Error: {error} 🚨")
-                        # Hapus dari proses yang sedang berjalan
+                        await progress_message.edit_text(f"❌ Error: {error}")
+                        # Tandai pesan sudah di-edit dan hapus dari proses yang sedang berjalan
+                        user_processes[user_id]['message_edited'] = True
                         user_processes.pop(user_id, None)
                     elif done:
-                        await progress_message.edit_text("✅ Proses mirroring selesai ✅")
-                        # Hapus dari proses yang sedang berjalan
+                        await progress_message.edit_text("✅ Proses mirroring selesai!")
+                        # Tandai pesan sudah di-edit dan hapus dari proses yang sedang berjalan
+                        user_processes[user_id]['message_edited'] = True
                         user_processes.pop(user_id, None)
                     else:
                         # Buat progress bar sederhana dengan tombol stop
@@ -157,8 +175,17 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
             asyncio.create_task(run_mirror())
             
         elif query.data == "confirm_no":
-            # Update pesan konfirmasi menjadi dibatalkan
-            await query.edit_message_text("❌ Proses mirroring dibatalkan.")
+            # Hapus kedua pesan (info dan konfirmasi)
+            await query.delete_message()  # Hapus pesan konfirmasi
+            await context.bot.delete_message(
+                chat_id=pending_data['chat_id'],
+                message_id=pending_data['info_message_id']
+            )
+            # Kirim pesan pembatalan
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ Proses mirroring dibatalkan."
+            )
         
         # Hapus dari pending setelah diproses
         user_pending.pop(user_id, None)
