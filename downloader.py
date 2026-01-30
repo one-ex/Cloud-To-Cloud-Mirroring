@@ -2,7 +2,9 @@
 
 import requests # type: ignore
 import logging
+import time
 from drive_uploader import resumable_upload
+from utils import format_bytes, format_time, format_speed, calculate_eta
 
 logger = logging.getLogger(__name__)
 CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
@@ -39,7 +41,9 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
         sent_bytes = 0
         last_percent_reported = 0
         final_response = None
-
+        start_time = time.time()
+        speed_samples = []
+        
         for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
             # Cek apakah proses dibatalkan (async-safe)
             if cancellation_event and cancellation_event.is_set():
@@ -52,7 +56,10 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
             await asyncio.sleep(0.001)
             
             if chunk:
+                chunk_start_time = time.time()
                 success, result = resumable_upload.upload_chunk(session, chunk)
+                chunk_end_time = time.time()
+                
                 if not success:
                     error_msg = f"Gagal upload chunk ke Google Drive: {result}"
                     logger.error(error_msg)
@@ -64,13 +71,34 @@ async def stream_download_to_drive(url, info, progress_callback=None, cancellati
                     final_response = result
 
                 sent_bytes += len(chunk)
+                
+                # Calculate speed
+                chunk_time = chunk_end_time - chunk_start_time
+                if chunk_time > 0:
+                    chunk_speed = len(chunk) / chunk_time
+                    speed_samples.append(chunk_speed)
+                    if len(speed_samples) > 10:
+                        speed_samples.pop(0)
+                
+                avg_speed = sum(speed_samples) / len(speed_samples) if speed_samples else 0
+                elapsed_time = time.time() - start_time
+                eta_seconds = calculate_eta(sent_bytes, size, avg_speed) if size and avg_speed > 0 else None
+                
                 if size and size > 0:
                     percent = int((sent_bytes / size) * 100)
                     if percent >= last_percent_reported + 1 or percent == 100:
                         last_percent_reported = percent
                         logger.info(f"Progress: {percent}%")
                         if progress_callback:
-                            await progress_callback(percent)
+                            await progress_callback(
+                                percent,
+                                downloaded=sent_bytes,
+                                total=size,
+                                speed=avg_speed,
+                                eta=eta_seconds,
+                                elapsed=elapsed_time,
+                                filename=filename
+                            )
         
         if progress_callback:
             await progress_callback(100, done=True)

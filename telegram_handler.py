@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from dotenv import load_dotenv # type: ignore
 from validator import validate_url_and_file
 from downloader import stream_download_to_drive
-from utils import format_bytes
+from utils import format_bytes, format_time, format_speed
 
 # Load environment variables
 load_dotenv()
@@ -97,7 +97,7 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                 'user_id': user_id
             }
 
-            async def progress_callback(percent, error=None, done=False, cancelled=False, message=""):
+            async def progress_callback(percent, error=None, done=False, cancelled=False, message="", downloaded=0, total=0, speed=0, eta=None, elapsed=0, filename=""):
                 try:
                     if cancelled:
                         # Untuk proses yang sengaja dihentikan - tidak pakai "❌ Error:"
@@ -120,7 +120,17 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         bar = '■' * filled_length + '□' * (bar_length - filled_length)
                         keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
                         reply_markup = InlineKeyboardMarkup(keyboard)
-                        await progress_message.edit_text(f"Progress: [ {bar} ] {percent}%", reply_markup=reply_markup)
+                        
+                        # Format informasi detail
+                        progress_info = f"""📁 File Name: {filename}
+📊 Progress: [{bar}] {percent}%
+⏱ Run Time: {format_time(elapsed)}
+📏 Size: {format_bytes(total)}
+⬇️ Downloaded: {format_bytes(downloaded)}
+⚡ Speed AVG: {format_speed(speed)}
+⏳ Estimasi: {format_time(eta) if eta else "Menghitung..."}"""
+
+                        await progress_message.edit_text(progress_info, reply_markup=reply_markup)
                 except Exception as e:
                     logger.error(f"Gagal mengedit pesan progres: {e}")
 
