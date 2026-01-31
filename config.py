@@ -102,8 +102,8 @@ class GoogleDriveConfig:
     TOKEN_FILE = 'token.json'
     FOLDER_ID_ENV = 'DRIVE_FOLDER_ID'
     UPLOAD_TIMEOUT = 300  # 5 menit untuk upload besar
-    MAX_CHUNK_SIZE = 10 * 1024 * 1024  # 5MB per chunk (resumable upload)
-    MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024  # 7GB maksimal ukuran file
+    MAX_CHUNK_SIZE = 10 * 1024 * 1024  # 10MB per chunk (resumable upload)
+    MAX_FILE_SIZE_BYTES = 7 * 1024 * 1024 * 1024  # 7GB maksimal ukuran file
 
 # Export semua config untuk kemudahan import
 __all__ = [

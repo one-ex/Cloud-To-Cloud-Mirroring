@@ -9,7 +9,7 @@ from downloader import stream_download_to_drive
 from utils import format_bytes, format_time, format_speed
 from config import (
     DownloadConfig, UIConfig, TelegramConfig, 
-    ErrorMessages, SuccessMessages, FileConfig
+    ErrorMessages, SuccessMessages
 )
 
 # Load environment variables
