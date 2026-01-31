@@ -78,6 +78,7 @@ class SuccessMessages:
     MIRRORING_CANCELLED = "❌ Proses mirroring dibatalkan."
     MIRRORING_COMPLETED = "✅ Proses mirroring selesai!"
     CONFIRMATION_RECEIVED = "✅ Konfirmasi diterima"
+    CONFIRMATION_CANCELLED = "❌ Konfirmasi dibatalkan"
     PROCESS_CANCELLED = "❌ Proses dibatalkan"
 
 class LoggingConfig:

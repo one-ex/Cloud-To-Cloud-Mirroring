@@ -236,7 +236,15 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         
     except Exception as e:
         logger.error(f"Error dalam handle_confirm_callback: {e}")
-        await query.edit_message_text(ErrorMessages.CONFIRMATION_ERROR)
+        # Coba edit message, tapi jika gagal (misalnya pesan sudah dihapus), kirim pesan baru
+        try:
+            await query.edit_message_text(ErrorMessages.CONFIRMATION_ERROR)
+        except Exception:
+            # Jika edit gagal, kirim pesan baru
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=ErrorMessages.CONFIRMATION_ERROR
+            )
         user_pending.pop(user_id, None)
 
 async def stop_mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
