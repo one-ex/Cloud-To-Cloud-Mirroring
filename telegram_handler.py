@@ -79,26 +79,21 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         pending_data = user_pending[user_id]
         url = pending_data['url']
         info = pending_data['info']
+        info_message_id = pending_data['info_message_id']
         
         if query.data == "confirm_yes":
             # Hapus pesan konfirmasi (pesan kedua), biarkan pesan info tetap ada
             await query.delete_message()
             
-            # Kirim pesan status memulai
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="⌛ Memulai proses mirroring ⌛"
-            )
-            
             # Buat cancellation event untuk proses ini (async-compatible)
             cancellation_event = asyncio.Event()
             
-            # Kirim pesan awal dengan tombol Stop
+            # Kirim pesan awal dengan format yang diinginkan + tombol Stop
             keyboard = [[InlineKeyboardButton("⏹ Stop Mirroring", callback_data="stop_mirror")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             progress_message = await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text="Memulai proses mirroring...",
+                text="⌛ Memulai proses mirroring ⌛",
                 reply_markup=reply_markup
             )
 
@@ -107,6 +102,9 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                 'cancellation_event': cancellation_event,
                 'progress_message': progress_message,
                 'user_id': user_id,
+                'info_message_id': info_message_id,
+                'chat_id': query.message.chat_id,
+                'context': context,  # Simpan context untuk delete_message
                 'message_edited': False  # Flag untuk cegah duplikasi edit
             }
 
@@ -120,6 +118,16 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         # Tandai sebelum edit untuk mencegah race condition
                         if user_id in user_processes:
                             user_processes[user_id]['message_edited'] = True
+                        
+                        # Hapus pesan info file yang dikirim sebelumnya
+                        try:
+                            if user_id in user_processes and 'info_message_id' in user_processes[user_id]:
+                                await user_processes[user_id]['context'].bot.delete_message(
+                                    chat_id=user_processes[user_id]['chat_id'],
+                                    message_id=user_processes[user_id]['info_message_id']
+                                )
+                        except Exception as e:
+                            logger.warning(f"Gagal menghapus pesan info: {e}")
                         
                         # Tampilkan pesan pembatalan
                         try:
