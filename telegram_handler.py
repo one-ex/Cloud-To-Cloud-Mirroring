@@ -187,7 +187,7 @@ async def handle_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
 {UIConfig.Emoji.PROGRESS} Progress: [{bar}] {percent}%
 {UIConfig.Emoji.TIME} Run Time: {format_time(elapsed)}
 {UIConfig.Emoji.SIZE} Size: {format_bytes(total)}
-{UIConfig.Emoji.DOWNLOADED} Downloaded: {format_bytes(downloaded)}
+{UIConfig.Emoji.DOWNLOAD} Downloaded: {format_bytes(downloaded)}
 {UIConfig.Emoji.SPEED} Speed AVG: {format_speed(speed)}
 {UIConfig.Emoji.ETA} Estimasi: {format_time(eta) if eta else "Menghitung..."}"""
 
