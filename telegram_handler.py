@@ -107,7 +107,8 @@ async def mirror(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = update.message.text.strip()
         valid, info = await validate_url_and_file(url)
         if not valid:
-            await update.message.reply_text(f"URL/file tidak valid: {info}")
+            error_msg = info.get('error', 'URL/file tidak valid') if isinstance(info, dict) else str(info)
+            await update.message.reply_text(f"URL/file tidak valid: {error_msg}")
             return
         
         # Gunakan format_bytes untuk menampilkan ukuran file
