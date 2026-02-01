@@ -9,7 +9,7 @@ class DownloadConfig:
     """Konfigurasi untuk download dan upload"""
     TIMEOUT = 30                  # detik - timeout untuk request HTTP
     MAX_RETRIES = 3               # kali - maksimal percobaan ulang
-    CHUNK_SIZE_MB = 10            # MB - ukuran chunk untuk streaming
+    CHUNK_SIZE_MB = 50            # MB - ukuran chunk untuk streaming
     MAX_SPEED_SAMPLES = 10        # jumlah sample untuk hitung kecepatan
     RETRY_DELAY_MULTIPLIER = 2    # exponential backoff multiplier
 
@@ -103,8 +103,8 @@ class GoogleDriveConfig:
     TOKEN_FILE = 'token.json'
     FOLDER_ID_ENV = 'DRIVE_FOLDER_ID'
     UPLOAD_TIMEOUT = 300  # 5 menit untuk upload besar
-    MAX_CHUNK_SIZE = 10 * 1024 * 1024  # 10MB per chunk (resumable upload)
-    MAX_FILE_SIZE_BYTES = 7 * 1024 * 1024 * 1024  # 7GB maksimal ukuran file
+    MAX_CHUNK_SIZE = 50 * 1024 * 1024  # 50MB per chunk (resumable upload)
+    MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 * 1024  # 10GB maksimal ukuran file
 
 # Export semua config untuk kemudahan import
 __all__ = [
